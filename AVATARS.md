@@ -18,7 +18,8 @@ User-supplied media stays in the private `.runtime` asset directory, outside Git
 For this installation David is a CPU-transcoded 256×256 crop of the supplied
 25-second video. Lucy is a 192×192, 2-second loop made from the supplied archive's
 animated `preview.gif`. No wallpaper engine, shader, installer or archive code is
-executed. The original downloads are retained unchanged.
+executed. Conversion reads the supplied downloads without modifying them; the
+accepted runtime uses the pinned derived clips in private storage.
 
 Source changes require the existing current-content tests, independent review and
 fixed-snapshot activation. A successful local preview does not activate a release.

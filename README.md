@@ -1,13 +1,14 @@
 # Research Agent Orchestrator
 
-> **Status: PARTIAL — software source preview, not a completed worker deployment.**
-> Real Codex Approval needed / Full Access workflows and independent Claude task
-> reviews passed; 170 UI/worker tests passed. The final fixed-source Claude audit
-> stopped with an explicit service quota error and returned no acceptance verdict.
-> The latest candidate was not activated; the installed native worker is paused.
-> Existing bounded analysis and read-only telemetry remain separate. No server
-> research task, building gate or GPU result is certified by this repository.
-> Private runtime/acceptance records are intentionally not published.
+> **Status: PARTIAL overall — desktop UI update deployed locally; native worker paused.**
+> The desktop release at commit `111b6f4` passed 184 UI/desktop/worker regression
+> tests, a fresh fixed-source Claude audit, installed native video/layout checks,
+> a natural Windows time-trigger receipt and real Disable/Enable/reopen checks.
+> This accepts the desktop update, not a new native-worker deployment. The native
+> worker remains paused/unregistered; its current real dual-CLI and scheduler
+> acceptance is outstanding. Existing bounded analysis and read-only telemetry
+> remain separate. No server research task, building gate or GPU result is certified.
+> Private runtime, supplied media and acceptance records are not published.
 
 
 A Windows desktop control room for **Codex execution, Claude review and research
@@ -56,20 +57,29 @@ a building, or authorize research changes.
   publication/merge, or blind replay after an uncertain crash.
 - **Idle without model calls:** status refreshes do not invoke models. The legacy
   bounded queue checks every 15 minutes; explicit worker submissions start promptly.
-- **Local animated portraits (candidate):** matching square David/Lucy video frames,
-  silent loops, original playback speed, pause/reduced-motion support and sprite
-  fallback. Native playback, pause/resume and layout are verified separately from
-  release activation. See [AVATARS.md](AVATARS.md); supplied media stays outside Git.
+- **Local animated portraits:** matching square David/Lucy video frames, silent
+  loops, original playback speed, pause/reduced-motion support and sprite fallback.
+  Native playback, pause/resume and layout passed the installed desktop checks.
+  See [AVATARS.md](AVATARS.md); supplied media stays outside Git.
+- **One stable desktop entry:** Desktop, Start menu and taskbar shortcuts resolve
+  the currently accepted snapshot. Opening again focuses the same version's window
+  and checks the local connection without discarding an unsent draft. If its owned
+  service needs recovery, connection attempts are bounded; an explicitly disabled
+  service stays disabled.
 
 Stack: Python 3.12 (primarily standard library), SQLite, C#/.NET Framework 4.8 with
 WebView2, HTML/CSS/JavaScript, PowerShell and Windows Task Scheduler.
 
 ## Use and deployment
 
-On the configured Windows machine open **BGV Scene Control** from Desktop or Start.
-Choose **Codex 工作**, enter a task, choose a permission mode and send. An approval
-card shows the requested operation with **允许这一次 / 拒绝**. The original **文本分析**
-tab retains its separate bounded, tool-disabled workflow.
+On the configured Windows machine open **BGV Scene Control** from Desktop, Start
+or the taskbar pin. The installed desktop connects to its owned local service;
+**文本分析** retains its separate bounded, tool-disabled workflow.
+
+The **Codex 工作** interface supports tasks, permission selection and approval cards
+with **允许这一次 / 拒绝**. These execution controls require an accepted, enabled native
+worker. That worker is currently paused/unregistered; publishing its source does not
+activate it or make it available for research dispatch.
 
 This is currently a single-machine deployment, not a portable installer. Helpers
 intentionally retain the existing `E:\Github\Building-Generation-Validation`
@@ -189,6 +199,12 @@ installation, state recovery, evidence locations and removal. Deployment status 
 Task Scheduler time-trigger receipt all exist in `.runtime/DEPLOYMENT-REPORT.md`.
 
 ## Development and validation
+
+The accepted local desktop snapshot is fixed to source commit `111b6f4` (source
+SHA-256 `6aa67f2ee524d8b494402bc21997ba8eb570afc9b13ecf58668f59d7bfd34b68`).
+The later publication documentation does not change that running snapshot or extend
+its acceptance to the native worker. A source checkout still needs the documented
+private dependencies, media, tests and review before a new local activation.
 
 ```powershell
 & 'C:\Python312\python.exe' 'E:\Github\Building-Generation-Validation\tools\run_tests.py'
