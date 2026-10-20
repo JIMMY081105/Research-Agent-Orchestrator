@@ -4,6 +4,8 @@ This repository is the desktop/orchestrator development source. It contains no
 server checkout, building assets, generated scenes, voxel caches, experiments or
 scientific PASS/FAIL reports.
 
+- `assets/avatars/`: the approved cropped MP4 portraits and sprite fallbacks.
+- `docs/images/`: synthetic UI previews and short GIF versions of those portraits.
 - `native/`: native Windows/WebView2 shell.
 - `researchops/worker_*`: native Codex transport, user permission requests, owned
   process lifecycle, queue records and independent bounded workspace review.
