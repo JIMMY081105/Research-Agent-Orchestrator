@@ -8,16 +8,25 @@
 > worker remains paused/unregistered; its current real dual-CLI and scheduler
 > acceptance is outstanding. Existing bounded analysis and read-only telemetry
 > remain separate. No server research task, building gate or GPU result is certified.
-> Private runtime, supplied media and acceptance records are not published.
+> Original downloads, private runtime and acceptance records are not published.
 
 
 A Windows desktop control room for **Codex execution, Claude review and research
 operations visibility**, using existing CLI subscription logins.
 
-![Scene Control desktop interface](docs/images/scene-control.png)
+![Scene Control with animated David and Lucy portraits](docs/images/scene-control-live.gif)
 
-*Interface preview. Status values in documentation previews are illustrative;
-screenshots are not experimental or deployment acceptance evidence.*
+*Animated UI preview rendered from the current interface with synthetic demonstration
+status. No live jobs, prompts, sessions or research records are shown. This is not
+deployment or scientific acceptance evidence. [Static preview](docs/images/scene-control.png).*
+
+| Codex · David | Claude · Lucy |
+| :---: | :---: |
+| ![David animated portrait](docs/images/david-live.gif) | ![Lucy animated portrait](docs/images/lucy-live.gif) |
+
+The same cropped, silent clips used by the desktop are included in
+[`assets/avatars/`](assets/avatars). GIF previews play directly on this page;
+the application uses the pinned MP4 files at their original playback speed.
 
 ## What belongs here
 
@@ -60,7 +69,7 @@ a building, or authorize research changes.
 - **Local animated portraits:** matching square David/Lucy video frames, silent
   loops, original playback speed, pause/reduced-motion support and sprite fallback.
   Native playback, pause/resume and layout passed the installed desktop checks.
-  See [AVATARS.md](AVATARS.md); supplied media stays outside Git.
+  See [AVATARS.md](AVATARS.md) for the versioned portrait assets and their provenance.
 - **One stable desktop entry:** Desktop, Start menu and taskbar shortcuts resolve
   the currently accepted snapshot. Opening again focuses the same version's window
   and checks the local connection without discarding an unsent draft. If its owned
