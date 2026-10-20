@@ -238,6 +238,30 @@ def avatar_geometry_valid(avatars):
     return True
 
 
+def avatar_videos_valid(avatars):
+    """Reject stretched, unequal, remote, unloaded or audible video portraits."""
+    if not avatar_geometry_valid(avatars):
+        return False
+    sizes = []
+    for name, avatar in avatars.items():
+        v = avatar.get("video")
+        if not isinstance(v, dict): return False
+        if (v.get("src") != "/assets/" + name + ".mp4" or v.get("readyState", 0) < 2
+                or v.get("muted") is not True or v.get("loop") is not True
+                or v.get("error") is not None or v.get("objectFit") != "contain"
+                or v.get("opacity") != 1 or v.get("playbackRate") != 1):
+            return False
+        rect = v.get("rect", {})
+        values = [v.get("width"), v.get("height"), rect.get("width"), rect.get("height")]
+        if not all(finite(n) and n > 0 for n in values): return False
+        nw, nh, width, height = values
+        if (abs(nw / nh - 1) > .01 or abs(width / height - 1) > .02
+                or abs(width - avatar["frameContentWidth"]) > 1
+                or abs(height - avatar["frameContentHeight"]) > 1): return False
+        sizes.append((width, height))
+    return all(abs(a - b) <= 1 for a, b in zip(*sizes))
+
+
 def inspect_native(record, args, run_id, app, pid, birth, png):
     r = record if isinstance(record, dict) else {}
     viewport = r.get("viewport") if isinstance(r.get("viewport"), dict) else {}
@@ -272,6 +296,11 @@ def inspect_native(record, args, run_id, app, pid, birth, png):
     layout = r.get("layout") if isinstance(r.get("layout"), dict) else {}
     checks["avatar_proportions_correct"] = (layout.get("checks", {}).get("avatarProportionsCorrect") is True
                                               and avatar_geometry_valid(layout.get("avatars")))
+    checks["avatar_video_layout_correct"] = avatar_videos_valid(layout.get("avatars"))
+    motion = layout.get("avatarMotion", {})
+    checks["avatar_videos_actually_animate_and_pause"] = (set(motion) == {"david", "lucy"}
+        and all(isinstance(v, dict) and v.get("advanced") is True and v.get("pausedHeld") is True
+                and v.get("resumed") is True for v in motion.values()))
     native_checks = r.get("native_checks") if isinstance(r.get("native_checks"), dict) else {}
     checks["native_capture_stable"] = (set(native_checks) == {"visible_normal_before_probe",
         "visible_normal_before_capture", "visible_normal_after_capture", "geometry_stable_during_probe",

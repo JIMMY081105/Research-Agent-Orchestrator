@@ -2,7 +2,7 @@
 
 > **Status: PARTIAL — software source preview, not a completed worker deployment.**
 > Real Codex Approval needed / Full Access workflows and independent Claude task
-> reviews passed; 162 UI/worker tests passed. The final fixed-source Claude audit
+> reviews passed; 170 UI/worker tests passed. The final fixed-source Claude audit
 > stopped with an explicit service quota error and returned no acceptance verdict.
 > The latest candidate was not activated; the installed native worker is paused.
 > Existing bounded analysis and read-only telemetry remain separate. No server
@@ -56,6 +56,10 @@ a building, or authorize research changes.
   publication/merge, or blind replay after an uncertain crash.
 - **Idle without model calls:** status refreshes do not invoke models. The legacy
   bounded queue checks every 15 minutes; explicit worker submissions start promptly.
+- **Local animated portraits (candidate):** matching square David/Lucy video frames,
+  silent loops, original playback speed, pause/reduced-motion support and sprite
+  fallback. Native playback, pause/resume and layout are verified separately from
+  release activation. See [AVATARS.md](AVATARS.md); supplied media stays outside Git.
 
 Stack: Python 3.12 (primarily standard library), SQLite, C#/.NET Framework 4.8 with
 WebView2, HTML/CSS/JavaScript, PowerShell and Windows Task Scheduler.

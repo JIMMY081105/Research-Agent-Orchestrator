@@ -51,6 +51,11 @@ class DesktopBundleTests(unittest.TestCase):
         self.addCleanup(avatar_patch.stop)
         for name in dashboard.AVATARS:
             (self.assets / name).write_bytes(data)
+        clip = b"\x00\x00\x00\x18ftypisom approved video"
+        video_patch = patch.object(dashboard, "AVATAR_VIDEOS", {name: bundle.digest(clip) for name in dashboard.AVATAR_VIDEOS})
+        video_patch.start(); self.addCleanup(video_patch.stop)
+        for name in dashboard.AVATAR_VIDEOS:
+            (self.assets / name).write_bytes(clip)
         self.config = {"owner": dashboard.OWNER, "bind": "127.0.0.1", "port": 8765,
                        "ssh": r"C:\Windows\System32\OpenSSH\ssh.exe", "ssh_alias": "sunmingyuan1",
                        "state_poll_seconds": 2, "gpu_poll_seconds": 30, "gpu_stale_seconds": 90}
@@ -100,7 +105,7 @@ class DesktopBundleTests(unittest.TestCase):
         self.assertEqual(self.runtime / "desktop/snapshots" / record["sha256"], target)
         self.assertEqual(record, bundle.verify(target, record["sha256"]))
         expected = {"source/" + name for name in FIXTURE_SOURCES} | {"source/config/live.json", "build.json"}
-        expected.update("source/assets/" + name for name in dashboard.AVATARS)
+        expected.update("source/assets/" + name for name in (*dashboard.AVATARS, *dashboard.AVATAR_VIDEOS))
         expected.update("app/" + name for name in bundle.APP_FILES)
         self.assertEqual(expected, set(record["files"]))
         self.assertNotIn("manifest.json", record["files"])

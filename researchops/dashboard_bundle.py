@@ -12,17 +12,35 @@ FILES = (
     "researchops/dashboard_state.py", "researchops/dashboard_gpu.py", "researchops/dashboard_web.py",
     "researchops/dashboard_bundle.py", "config/dashboard.example.json", "tools/dashboard.ps1",
     "tools/review_dashboard.py", "tools/verify_dashboard.py", "tools/test_dashboard.py",
-    "DASHBOARD.md", "README.md", "POLICY.md",
+    "DASHBOARD.md", "README.md", "POLICY.md", "AVATARS.md",
     "tests/test_dashboard_state.py",
     "tests/test_dashboard_gpu.py", "tests/test_dashboard_server.py", "tests/test_dashboard_bundle.py",
     "researchops/dashboard_tasks.py", "tests/test_dashboard_tasks.py",
     "researchops/worker_store.py", "researchops/worker_web.py", "tests/test_worker_store.py",
-    "tests/test_worker_http.py",
+    "tests/test_worker_http.py", "tests/test_dashboard_avatar_media.py",
 )
 AVATARS = {
     "david.jpg": "d86833586e9e0c6b9ac84e873266386c011edc48743d2d9b14d6f22eee08a253",
     "lucy.jpg": "c14b2e3c278c6961b72c5200ba0ace9749cc9ae49d882fa4e112d4eb52799f5e",
 }
+AVATAR_VIDEOS = {
+    "david.mp4": "421aa392c0b556ef3ec799322d40e9f1864592bc8820d154880ade238dd4afc0",
+    "lucy.mp4": "177972242f35d13fd931a4be4beae86a8d8095d37c7e2677968e65b09a76d73a",
+}
+
+
+def video_assets(directory):
+    """Only the two approved local, content-bound, silent avatar clips."""
+    values = {}
+    for name, expected in AVATAR_VIDEOS.items():
+        path = safe_path(Path(directory) / name)
+        if not path.is_file() or path.stat().st_size > 2 * 1024 * 1024:
+            raise ValueError("UNAPPROVED_AVATAR_VIDEO")
+        data = path.read_bytes()
+        if len(data) < 16 or data[4:8] != b"ftyp" or digest(data) != expected:
+            raise ValueError("UNAPPROVED_AVATAR_VIDEO")
+        values[name] = data
+    return values
 
 
 def canonical(value):
@@ -78,6 +96,7 @@ def bundle_manifest(root, config, assets):
         if len(value) > 1024 * 1024 or not value.startswith(b"\xff\xd8\xff") or digest(value) != expected:
             raise ValueError("UNAPPROVED_AVATAR_ASSET")
         files["assets/" + name] = expected
+    files.update({"assets/" + name: digest(data) for name, data in video_assets(assets).items()})
     return {"owner": OWNER, "source_sha256": source["sha256"], "files": files,
             "sha256": digest(canonical(files))}
 
@@ -95,12 +114,14 @@ def verify(bundle, expected):
         raise ValueError("UI_HASH_REQUIRED")
     record = read_small_json(bundle / "manifest.json")
     files = record.get("files")
-    allowed = set(FILES) | {"config/live.json", *["assets/" + name for name in AVATARS]}
+    allowed = set(FILES) | {"config/live.json", *["assets/" + name for name in (*AVATARS, *AVATAR_VIDEOS)]}
     if (record.get("owner") != OWNER or type(files) is not dict or set(files) != allowed
             or record.get("sha256") != expected or digest(canonical(files)) != expected):
         raise ValueError("UI_MANIFEST_INVALID")
     if any(files["assets/" + name] != expected_sha for name, expected_sha in AVATARS.items()):
         raise ValueError("UNAPPROVED_AVATAR_ASSET")
+    if any(files["assets/" + name] != expected_sha for name, expected_sha in AVATAR_VIDEOS.items()):
+        raise ValueError("UNAPPROVED_AVATAR_VIDEO")
     source = bundle / "source"
     found = set()
     for path in source.rglob("*"):
@@ -150,7 +171,7 @@ def freeze(root, runtime, config, assets, test_path, review_path):
         shutil.copyfile(root / name, destination)
     (source / "config/live.json").write_bytes(canonical(config))
     (source / "assets").mkdir()
-    for name in AVATARS:
+    for name in (*AVATARS, *AVATAR_VIDEOS):
         shutil.copyfile(Path(assets) / name, source / "assets" / name)
     (target / "manifest.json").write_bytes(canonical(record))
     verify(target, record["sha256"])

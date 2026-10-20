@@ -113,6 +113,7 @@ def _avatars(assets):
         if not data.startswith(b"\xff\xd8\xff") or digest(data) != expected:
             raise ValueError("UNAPPROVED_AVATAR_ASSET")
         values[name] = expected
+    values.update({name: digest(data) for name, data in dashboard_bundle.video_assets(assets).items()})
     return values
 
 
@@ -162,7 +163,7 @@ def verify(bundle, expected):
         raise ValueError("DESKTOP_HASH_REQUIRED")
     record = read_small_json(bundle / "manifest.json")
     allowed = {"source/" + name for name in _sources()} | {"source/config/live.json", "build.json"}
-    allowed.update("source/assets/" + name for name in dashboard_bundle.AVATARS)
+    allowed.update("source/assets/" + name for name in (*dashboard_bundle.AVATARS, *dashboard_bundle.AVATAR_VIDEOS))
     allowed.update("app/" + name for name in APP_FILES)
     if (type(record) is not dict or set(record) != {"owner", "source_sha256", "files", "sha256"}
             or record.get("owner") != OWNER or not _hashmap(record.get("files"), allowed)
@@ -228,7 +229,7 @@ def freeze(root, runtime, config, assets, app, build_path, test_path, review_pat
     (stage / "source/config").mkdir(parents=True, exist_ok=True)
     (stage / "source/config/live.json").write_bytes(canonical(config))
     (stage / "source/assets").mkdir(parents=True, exist_ok=True)
-    for name in dashboard_bundle.AVATARS:
+    for name in (*dashboard_bundle.AVATARS, *dashboard_bundle.AVATAR_VIDEOS):
         shutil.copyfile(safe_path(Path(assets) / name), stage / "source/assets" / name)
     (stage / "app").mkdir()
     for name in APP_FILES:

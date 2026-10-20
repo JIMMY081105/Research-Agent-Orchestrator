@@ -181,7 +181,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Referrer-Policy", "no-referrer")
         self.send_header("Cross-Origin-Resource-Policy", "same-origin")
         self.send_header("Content-Security-Policy", "default-src 'none'; script-src 'self'; "
-                         "style-src 'self' 'unsafe-inline'; img-src 'self'; connect-src 'self'; "
+                         "style-src 'self' 'unsafe-inline'; img-src 'self'; media-src 'self'; connect-src 'self'; "
                          "font-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'")
         self.send_header("Connection", "close")
         self.end_headers()
@@ -322,6 +322,7 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def resources(asset_directory):
+    from .dashboard_bundle import video_assets
     from .dashboard_web import PAGE, CSS, JS
     from .worker_web import JS as WORKER_JS, CSS as WORKER_CSS
     return {"/": ("text/html; charset=utf-8", PAGE.encode("utf-8")),
@@ -330,7 +331,8 @@ def resources(asset_directory):
             "/assets/worker.js": ("text/javascript; charset=utf-8", WORKER_JS.encode("utf-8")),
             "/assets/worker.css": ("text/css; charset=utf-8", WORKER_CSS.encode("utf-8")),
             "/assets/david.jpg": ("image/jpeg", (Path(asset_directory) / "david.jpg").read_bytes()),
-            "/assets/lucy.jpg": ("image/jpeg", (Path(asset_directory) / "lucy.jpg").read_bytes())}
+            "/assets/lucy.jpg": ("image/jpeg", (Path(asset_directory) / "lucy.jpg").read_bytes()),
+            **{"/assets/" + name: ("video/mp4", data) for name, data in video_assets(asset_directory).items()}}
 
 
 def serve(runtime, config, assets, source_sha256, trigger, run_seconds=None, directory=None, composer=False):

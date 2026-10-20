@@ -326,7 +326,7 @@ namespace BgvSceneControl
             // This host exposes only these fixed local task endpoints, never arbitrary URLs.
             if (method == "POST") return new[] { "/api/tasks", "/api/worker/turns", "/api/worker/approval", "/api/worker/cancel" }.Contains(path);
             if (method != "GET" && method != "HEAD") return false;
-            if (new[] { "/", "/api/health", "/api/status", "/assets/dashboard.css", "/assets/dashboard.js", "/assets/worker.css", "/assets/worker.js", "/assets/david.jpg", "/assets/lucy.jpg" }.Contains(path))
+            if (new[] { "/", "/api/health", "/api/status", "/assets/dashboard.css", "/assets/dashboard.js", "/assets/worker.css", "/assets/worker.js", "/assets/david.jpg", "/assets/lucy.jpg", "/assets/david.mp4", "/assets/lucy.mp4" }.Contains(path))
                 return true;
             if (method != "GET") return false;
             if (new[] { "/api/composer", "/api/worker/capabilities", "/api/worker/status" }.Contains(path)) return true;
@@ -442,6 +442,8 @@ Object.keys(selectors).forEach(function(key){
     var entry={found:true,loaded:loaded,naturalWidth:nw,naturalHeight:nh,gridColumns:3,gridRows:2,objectFit:is.objectFit,overflowX:fs.overflowX,overflowY:fs.overflowY,src:image.getAttribute('src'),frame:rect(frame),image:rect(image),frameContentWidth:fw,frameContentHeight:fh,imageContentWidth:iw,imageContentHeight:ih};
     entry.checks={loaded:loaded,frameMatchesCellAspect:loaded&&fw>0&&fh>0&&Math.abs(fw/fh-cellAspect)<=0.02,spriteMatchesNaturalAspect:loaded&&iw>0&&ih>0&&Math.abs(iw/ih-nw/nh)<=0.02,singleCellFitsFrame:fw>0&&fh>0&&Math.abs(iw/3-fw)<=1&&Math.abs(ih/2-fh)<=1,frameClipsSprite:['clip','hidden'].indexOf(fs.overflowX)>=0&&['clip','hidden'].indexOf(fs.overflowY)>=0,objectFitPreservesRatio:is.objectFit==='contain',sourceFixed:entry.src==='/assets/'+key+'.jpg'};
     result.avatars[key]=entry;
+    var clip=document.querySelector('[data-avatar-video='+key+']');
+    if(clip){var cs=getComputedStyle(clip);entry.video={src:clip.getAttribute('src'),readyState:clip.readyState,width:clip.videoWidth,height:clip.videoHeight,currentTime:clip.currentTime,muted:clip.muted,loop:clip.loop,paused:clip.paused,playbackRate:clip.playbackRate,objectFit:cs.objectFit,opacity:parseFloat(cs.opacity),rect:rect(clip),error:clip.error?clip.error.code:null};}
 });
 var panels=['mission','gpu','codex','claude'],critical=['connection','refresh','runtime','gpuState','gpuUtil','codexState','claudeState','observed','gpuObserved','composerPrompt','composerSubmit'];
 result.panels={};panels.forEach(function(k){var e=result.elements[k];result.panels[k]=Object.assign({},e.rect||{},{visible:e.visible,insideViewport:e.insideViewport});});
@@ -524,6 +526,23 @@ return result;})()";
                 if (closed) return;
                 var beforeCapture = ObserveCaptureWindow();
                 var layout = Files.Json.DeserializeObject(text) as Dictionary<string, object>;
+                // Only this new diagnostic window is exercised; no service or task action.
+                const string avatarSampler = @"window.__bgvAvatarSample=function(){var r={};document.querySelectorAll('[data-avatar-video]').forEach(function(v){r[v.dataset.avatarVideo]={frames:v.getVideoPlaybackQuality().totalVideoFrames,paused:v.paused,time:v.currentTime};});return r;};window.__bgvAvatarA=window.__bgvAvatarSample();";
+                await web.CoreWebView2.ExecuteScriptAsync(avatarSampler);
+                await Task.Delay(350); if (closed) return;
+                await web.CoreWebView2.ExecuteScriptAsync("window.__bgvAvatarB=window.__bgvAvatarSample();document.querySelector('[data-pause]').click();");
+                await Task.Delay(150); if (closed) return;
+                await web.CoreWebView2.ExecuteScriptAsync("window.__bgvAvatarC=window.__bgvAvatarSample();");
+                await Task.Delay(300); if (closed) return;
+                await web.CoreWebView2.ExecuteScriptAsync("window.__bgvAvatarD=window.__bgvAvatarSample();document.querySelector('[data-pause]').click();");
+                await Task.Delay(350); if (closed) return;
+                var videoText = await web.CoreWebView2.ExecuteScriptAsync(@"(function(){var e=window.__bgvAvatarSample(),r={};['david','lucy'].forEach(function(k){var a=window.__bgvAvatarA[k],b=window.__bgvAvatarB[k],c=window.__bgvAvatarC[k],d=window.__bgvAvatarD[k];r[k]={advanced:!!a&&!!b&&!a.paused&&!b.paused&&b.frames>a.frames,pausedHeld:!!c&&!!d&&c.paused&&d.paused&&Math.abs(d.time-c.time)<0.02,resumed:!!d&&!!e[k]&&!e[k].paused&&e[k].frames>d.frames};});return r;})()");
+                var avatarMotion = Files.Json.DeserializeObject(videoText) as Dictionary<string, object>;
+                if (layout != null) layout["avatarMotion"] = avatarMotion;
+                bool videosPassed = avatarMotion != null && avatarMotion.Count == 2 && avatarMotion.Values.All(v => {
+                    var item = v as Dictionary<string, object>;
+                    return item != null && item.Count == 3 && item.Values.All(x => Object.Equals(x, true));
+                });
                 var checks = layout == null || !layout.ContainsKey("checks") ? null : layout["checks"] as Dictionary<string, object>;
                 bool layoutPassed = checks != null && checks.Count == 7 && checks.Values.All(v => Object.Equals(v, true));
                 var document = layout == null ? null : layout["document"] as Dictionary<string, object>;
@@ -553,7 +572,7 @@ return result;})()";
                     { "geometry_stable_during_probe", beforeProbe.SameGeometry(beforeCapture) },
                     { "geometry_stable_during_capture", beforeCapture.SameGeometry(afterCapture) }
                 };
-                bool passed = layoutPassed && nativeChecks.Values.All(v => Object.Equals(v, true));
+                bool passed = layoutPassed && videosPassed && nativeChecks.Values.All(v => Object.Equals(v, true));
                 Files.Save(Path.Combine(directory, "native.json"), new { schema = 1, owner = Files.Owner, run_id = options.Id,
                     app_path = Assembly.GetExecutingAssembly().Location, process_birth = process.StartTime.ToUniversalTime().ToFileTimeUtc().ToString(CultureInfo.InvariantCulture),
                     source_sha256 = sourceHash, bundle_sha256 = options.Smoke ? null : packageSha, smoke_id = options.Smoke ? options.Id : null,
