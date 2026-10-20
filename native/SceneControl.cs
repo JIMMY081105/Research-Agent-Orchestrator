@@ -79,7 +79,7 @@ namespace BgvSceneControl
         private TaskCompletionSource<bool> navigationWaiter;
         private string packageSha = "UNVERIFIED", source, phase = "STARTING";
         private bool ensureBusy, recoveryArmed = true, backendAuthorized, captured, closed, healthBusy;
-        private int attempts;
+        private int attempts, reopenRequests;
         internal int ExitCode;
         internal ControlWindow(Options value)
         {
@@ -135,6 +135,15 @@ namespace BgvSceneControl
             if (WindowState == FormWindowState.Minimized) WindowState = options.Diagnostic ? FormWindowState.Normal : FormWindowState.Maximized;
             Show(); Activate(); Native.SetForegroundWindow(Handle);
         }
+        internal async void ReopenOwned()
+        {
+            BringToFrontOwned();
+            if (closed || options.Diagnostic || ensureBusy) return;
+            reopenRequests++; recoveryArmed = true; WriteWindow();
+            // Healthy re-open checks connection without navigating away from an unsent draft.
+            if (phase == "READY") await CheckHealth();
+            else await EnsureWave("Re-open connection check");
+        }
         private void SetStatus(string text) { if (!closed) { status.Text = text; message.Text = text; } }
         private void Fail(string text) { phase = "UNAVAILABLE"; ExitCode = 2; SetStatus(text); loading.Visible = true; loading.BringToFront(); WriteWindow(); }
         private void WriteWindow()
@@ -147,7 +156,7 @@ namespace BgvSceneControl
                     owner = Files.Owner, pid = process.Id, birth = process.StartTime.ToUniversalTime().ToFileTimeUtc().ToString(CultureInfo.InvariantCulture),
                     sha256 = packageSha, hwnd = Handle.ToInt64().ToString(CultureInfo.InvariantCulture), state = phase,
                     observed_at = DateTime.UtcNow.ToString("o"), client_width = ClientSize.Width, client_height = ClientSize.Height,
-                    dpi = Native.GetDpi(Handle), ensure_attempts = attempts, read_only = true, task_submission_enabled = true, model_calls = 0 });
+                    dpi = Native.GetDpi(Handle), ensure_attempts = attempts, reopen_requests = reopenRequests, read_only = true, task_submission_enabled = true, model_calls = 0 });
             }
             catch (IOException) { SetStatus("本地窗口证据暂不可写；监控未修改任何研究任务。"); }
             catch (UnauthorizedAccessException) { SetStatus("本地窗口证据权限不足。"); }
@@ -548,6 +557,11 @@ return result;})()";
             try { options = Options.Parse(args); } catch (Exception) { options = new Options { Error = "启动参数无效；没有执行任何后台操作。" }; }
             string sid = WindowsIdentity.GetCurrent().User.Value;
             string suffix = sid + (options.Smoke ? ".Smoke." + options.Id : options.Verify ? ".Verify." + options.Id : "");
+            if (!options.Diagnostic && options.Error == null)
+            {
+                try { string fixedSource; suffix += ".Version." + Files.VerifyPackage(out fixedSource); }
+                catch (Exception) { options.Error = "Installed package verification failed; existing tasks are unchanged."; suffix += ".Invalid." + Guid.NewGuid().ToString("D"); }
+            }
             bool created;
             using (var mutex = new Mutex(false, @"Local\BGV.SceneControl.Desktop." + suffix, out created))
             {
@@ -565,7 +579,7 @@ return result;})()";
                 using (var window = new ControlWindow(options))
                 {
                     var registration = ThreadPool.RegisterWaitForSingleObject(signal, delegate {
-                        if (!window.IsDisposed && window.IsHandleCreated) try { window.BeginInvoke(new Action(window.BringToFrontOwned)); } catch (InvalidOperationException) { }
+                        if (!window.IsDisposed && window.IsHandleCreated) try { window.BeginInvoke(new Action(window.ReopenOwned)); } catch (InvalidOperationException) { }
                     }, null, Timeout.Infinite, false);
                     Application.Run(window); registration.Unregister(null); return window.ExitCode;
                 }

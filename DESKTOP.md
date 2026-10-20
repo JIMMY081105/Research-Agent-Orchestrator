@@ -13,7 +13,7 @@ audit timestamps and the shared review budget day stay UTC.
 
 ## Restart, sleep and re-open
 
-The fixed desktop/start-menu entry uses `SceneControlLauncher.exe`. On every open it reads the current activation, verifies the complete accepted snapshot and its own matching binary, then opens that version. It prevents an old pinned version from silently staying in use after an upgrade. No model is called during connection.
+The fixed desktop/start-menu entry uses `SceneControlLauncher.exe`. On every open it reads the current activation, verifies the complete accepted snapshot and its own matching binary, then opens that version. It prevents an old pinned version from silently staying in use after an upgrade. No model is called during connection. Normal windows are unique per accepted version: a still-open old version cannot absorb a new-version launch. Opening the same version again focuses that window and rechecks the connection. A healthy re-open preserves the unsent draft.
 
 The native window opens first, verifies its fixed package and checks its own
 service. When the service has exited, opening requests a start of the exact
