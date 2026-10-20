@@ -98,7 +98,7 @@ if($Mode -eq 'Install'){
  $temporary=Join-Path $directory ('launcher-'+$stamp+'.tmp')
  Copy-Item -LiteralPath $launcherSource -Destination $temporary
  if((Get-FileHash -LiteralPath $temporary).Hash -cne (Get-FileHash -LiteralPath $launcherSource).Hash){throw 'Launcher copy changed'}
- if(Test-Path -LiteralPath $launcher){[IO.File]::Replace($temporary,$launcher,$null)}else{[IO.File]::Move($temporary,$launcher)}
+ if(Test-Path -LiteralPath $launcher){[IO.File]::Replace($temporary,$launcher,(Join-Path $directory ('launcher-replaced-'+$stamp+'.exe')))}else{[IO.File]::Move($temporary,$launcher)}
  @{owner=$owner;sha256=(Get-FileHash -LiteralPath $launcher).Hash.ToLowerInvariant();bundle_sha256=$a.sha256;installed_at=(Get-Date).ToUniversalTime().ToString('o')}|ConvertTo-Json|Set-Content -LiteralPath $launcherReceipt -Encoding utf8
  foreach($path in $links){
   $link=$shell.CreateShortcut($path)
