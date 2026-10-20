@@ -1,0 +1,74 @@
+{
+  "stair-template-selection": {
+    "file": "skills/stair-template-selection.md",
+    "sha256": "a1121a4bf8c02f0df4e9530e5302e0e86d4fed140d38e86efd7f593cc5615571",
+    "applies_to": "scene_stair_workflow",
+    "profiles": [
+      "generic",
+      "house",
+      "school",
+      "office"
+    ],
+    "tools": [
+      "scene.room_meshes",
+      "stair.candidates",
+      "stair.build_usd",
+      "stair.check_usd"
+    ],
+    "model_step": {
+      "after": "stair.candidates",
+      "role": "writer",
+      "returns": "template among fitting candidates and rationale"
+    },
+    "acceptance": [
+      "selection is a fitting candidate with a numeric rationale",
+      "all stair.check_usd checks true",
+      "recorded output hashes match disk",
+      "external bindings pinned",
+      "independent review PASS"
+    ],
+    "failure": {
+      "selection_rejected_or_checks_false": "rework up to 2, then NEEDS_ATTENTION",
+      "tool_failure_or_read_only_change": "NEEDS_ATTENTION",
+      "engine_auth_quota_network_timeout": "wait at stage until resume --engine"
+    },
+    "contexts": [
+      {
+        "file": "skills/context-bgv-building-validation.md",
+        "sha256": "a3d20d854ae4bd57bdcf71277541105f0bad28cd2bb932f71e7697f6ddb12bed",
+        "origin": "codex-history-90d/bgv-building-validation/SKILL.md",
+        "origin_sha256": "a3d20d854ae4bd57bdcf71277541105f0bad28cd2bb932f71e7697f6ddb12bed"
+      },
+      {
+        "file": "skills/context-bgv-building-validation-cases.md",
+        "sha256": "002f89e19cf43fd8d68f285ab1c57d67d623296fb06e99292278741c89e14451",
+        "origin": "codex-history-90d/bgv-building-validation/references/cases.md",
+        "origin_sha256": "002f89e19cf43fd8d68f285ab1c57d67d623296fb06e99292278741c89e14451"
+      },
+      {
+        "file": "skills/context-bgv-stair-template-fit.md",
+        "sha256": "ff65d0c9b9e40bd1f739ecd4197cd53a75ecd1bf5c651af33a95304480cf6e9b",
+        "origin": "codex-history-90d/bgv-stair-template-fit/SKILL.md",
+        "origin_sha256": "ff65d0c9b9e40bd1f739ecd4197cd53a75ecd1bf5c651af33a95304480cf6e9b"
+      },
+      {
+        "file": "skills/context-bgv-stair-template-fit-cases.md",
+        "sha256": "05dce23a6c3b1c33043acce714958328e6201c46ca7ce1cd3e53c197e6e6cb7e",
+        "origin": "codex-history-90d/bgv-stair-template-fit/references/cases.md",
+        "origin_sha256": "05dce23a6c3b1c33043acce714958328e6201c46ca7ce1cd3e53c197e6e6cb7e"
+      },
+      {
+        "file": "skills/context-bgv-usd-collision-audit.md",
+        "sha256": "33cdb34116af028c8b1faaf17cfbea522633c0c33532b7e22b172543252536d2",
+        "origin": "codex-history-90d/bgv-usd-collision-audit/SKILL.md",
+        "origin_sha256": "33cdb34116af028c8b1faaf17cfbea522633c0c33532b7e22b172543252536d2"
+      },
+      {
+        "file": "skills/context-bgv-usd-collision-audit-cases.md",
+        "sha256": "8e9fcc32127e9b7ef73a430bf1a27274a83e1dda524380e139403a9e60e1335d",
+        "origin": "codex-history-90d/bgv-usd-collision-audit/references/cases.md",
+        "origin_sha256": "8e9fcc32127e9b7ef73a430bf1a27274a83e1dda524380e139403a9e60e1335d"
+      }
+    ]
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "goal_id": "22222222-2222-4222-8222-222222222222",
+  "prompt": "Read the supplied research notes, state the confirmed scope and identify unresolved inputs. Do not claim generation or simulation has run.",
+  "inputs": {
+    "notes": {
+      "kind": "text",
+      "value": "Replace this with approved non-sensitive project notes."
+    }
+  }
+}

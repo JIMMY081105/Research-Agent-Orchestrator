@@ -1,0 +1,8 @@
+{
+  "schema": 1,
+  "id": "00000000-0000-4000-8000-000000000001",
+  "title": "Factory80: two samples for user review",
+  "summary": "Concise final report only. Describe completed checks, failures and missing evidence honestly. No raw model output, credentials, machine configuration or logs.",
+  "reported_status": "UNVERIFIED",
+  "files": [{"path": "REPORT.md", "sha256": "REPLACE_WITH_REAL_64_CHARACTER_SHA256"}]
+}

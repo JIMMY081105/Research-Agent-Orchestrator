@@ -1,0 +1,10 @@
+{
+  "owner": "BGV.Windows.ResearchOps.UI.v1",
+  "bind": "127.0.0.1",
+  "port": 8765,
+  "ssh": "C:\\Windows\\System32\\OpenSSH\\ssh.exe",
+  "ssh_alias": "sunmingyuan1",
+  "state_poll_seconds": 2,
+  "gpu_poll_seconds": 30,
+  "gpu_stale_seconds": 90
+}

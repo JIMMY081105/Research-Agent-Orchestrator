@@ -1,0 +1,53 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ipynb_checkpoints/
+
+# Environment / secrets
+.env
+.env.*
+
+# Logs and outputs
+*.log
+logs/
+outputs/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Research orchestration: machine state and acceptance evidence never enter Git
+.runtime/
+work/
+*.sqlite*
+*.db
+*.lock
+machine.json
+*.pem
+*.key
+auth.json
+credentials.json
+*.pfx
+*.p12
+*.ppk
+*.jks
+*.keystore
+*.kdbx
+.netrc
+.npmrc
+.pypirc
+.git-credentials

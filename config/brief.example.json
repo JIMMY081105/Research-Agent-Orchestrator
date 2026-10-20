@@ -1,0 +1,20 @@
+{
+  "goal_id": "00000000-0000-4000-8000-000000000001",
+  "task_id": "00000000-0000-4000-8000-000000000002",
+  "purpose": "compare",
+  "question": "Compare the supplied candidates against my stated criteria. Identify missing evidence before recommending a choice.",
+  "sources": [
+    {
+      "id": "criteria",
+      "title": "My decision criteria",
+      "reference": "User supplied excerpt; replace with the actual source and reading scope",
+      "text": "REPLACE_WITH_YOUR_LITERAL_CRITERIA_AND_CONSTRAINTS"
+    },
+    {
+      "id": "candidates",
+      "title": "Candidate evidence",
+      "reference": "User supplied excerpt; no original URL is fetched by this action",
+      "text": "REPLACE_WITH_ACTUAL_NOTES_FOR_THE_OPTIONS_YOU_WANT_COMPARED"
+    }
+  ]
+}

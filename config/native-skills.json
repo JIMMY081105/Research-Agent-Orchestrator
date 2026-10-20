@@ -1,0 +1,52 @@
+{
+  "skills": [
+    {
+      "name": "bgv-building-validation",
+      "source": "codex-history-90d/bgv-building-validation/SKILL.md",
+      "sha256": "a3d20d854ae4bd57bdcf71277541105f0bad28cd2bb932f71e7697f6ddb12bed",
+      "selected_for": "scene_stair_workflow"
+    },
+    {
+      "name": "bgv-experiment-recovery",
+      "source": "codex-history-90d/bgv-experiment-recovery/SKILL.md",
+      "sha256": "79c93282dd905259b231a8ccf098c5dd6e8fb5f511c60a3bcd8a51b17f095a29",
+      "selected_for": null
+    },
+    {
+      "name": "bgv-render-evidence",
+      "source": "codex-history-90d/bgv-render-evidence/SKILL.md",
+      "sha256": "92f86b8a6e73792dae8b3737ed645ccfb5794c21c07a038aae9de4ce257b00aa",
+      "selected_for": null
+    },
+    {
+      "name": "bgv-research-claims",
+      "source": "codex-history-90d/bgv-research-claims/SKILL.md",
+      "sha256": "d9b8e0ea7f3e431e921df7b2f9600454a4ea01085889af3e628d31ed639b3e94",
+      "selected_for": "analyze_text"
+    },
+    {
+      "name": "bgv-scene-representation",
+      "source": "codex-history-90d/bgv-scene-representation/SKILL.md",
+      "sha256": "32f849b37136415c527d57fc8498a214644cd34b7f4d662c7ef404f61dbc8551",
+      "selected_for": null
+    },
+    {
+      "name": "bgv-stair-template-fit",
+      "source": "codex-history-90d/bgv-stair-template-fit/SKILL.md",
+      "sha256": "ff65d0c9b9e40bd1f739ecd4197cd53a75ecd1bf5c651af33a95304480cf6e9b",
+      "selected_for": "scene_stair_workflow"
+    },
+    {
+      "name": "bgv-usd-collision-audit",
+      "source": "codex-history-90d/bgv-usd-collision-audit/SKILL.md",
+      "sha256": "33cdb34116af028c8b1faaf17cfbea522633c0c33532b7e22b172543252536d2",
+      "selected_for": "scene_stair_workflow"
+    },
+    {
+      "name": "bgv-windows-orchestration",
+      "source": "codex-history-90d/bgv-windows-orchestration/SKILL.md",
+      "sha256": "10b3ba611a9c55935dc5b009c84d5c786f5cd43b21bf674b3a481332f9e6b2a0",
+      "selected_for": null
+    }
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "schema": 1,
+  "name": "bgv-research-claims",
+  "action": "analyze_text",
+  "files": [
+    {
+      "file": "skills/context-bgv-research-claims.md",
+      "origin": "codex-history-90d/bgv-research-claims/SKILL.md",
+      "sha256": "d9b8e0ea7f3e431e921df7b2f9600454a4ea01085889af3e628d31ed639b3e94"
+    },
+    {
+      "file": "skills/context-bgv-research-claims-cases.md",
+      "origin": "codex-history-90d/bgv-research-claims/references/cases.md",
+      "sha256": "828438bd818cfa45b348b9ef9c6222de21292b3342e2aeb45d1a420663599e32"
+    }
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "schema": 2,
+  "mode": "observe-analysis-and-cpu-scene-workflows",
+  "actions": ["analyze_numbers", "inspect_text", "analyze_text", "scene_stair_workflow"],
+  "engine_daily_limits": {"codex": null, "claude": null},
+  "daily_review_limit": 50,
+  "max_engine_resumes": 3,
+  "max_reworks": 2,
+  "timeout_seconds": 180,
+  "tool_timeout_seconds": 300,
+  "memory_mb": 4096,
+  "tool_memory_mb": 6144,
+  "max_input_bytes": 32768,
+  "max_artifact_bytes": 65536,
+  "schedule_minutes": 15,
+  "research_write": false,
+  "gpu": false,
+  "publish": false
+}

@@ -1,0 +1,9 @@
+{
+  "schema": 1,
+  "enabled": false,
+  "host_alias": "REPLACE_WITH_APPROVED_ALIAS",
+  "read_root": "/REPLACE_WITH_APPROVED/RESEARCH_ROOT",
+  "known_files": [],
+  "monitor_scripts": [],
+  "cadence_seconds": 900
+}

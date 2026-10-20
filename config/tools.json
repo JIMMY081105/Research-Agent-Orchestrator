@@ -1,0 +1,187 @@
+{
+  "schema": 1,
+  "external": {
+    "buildingsgen": {
+      "repository": "C:\\Research\\Example-Generation",
+      "path": "C:\\Research\\Example-Generation\\src\\buildingsgen",
+      "commit": "0000000000000000000000000000000000000000",
+      "suffixes": [
+        ".py",
+        ".yaml"
+      ],
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "access": "read-only import with python -I -B; never installed, never written"
+    },
+    "packages": {
+      "numpy": "1.26.4",
+      "scipy": "1.14.1",
+      "trimesh": "5.0.0",
+      "usd-core": "26.8",
+      "PyYAML": "6.0.2"
+    }
+  },
+  "scenes": {},
+  "tools": {
+    "scene.room_meshes": {
+      "runner": "room_meshes",
+      "purpose": "Inventory one registered room: per-mesh collision-mesh sanity (non-empty, finite, watertight), floor extent, wall thickness, interior and wall height",
+      "params": {
+        "scene": {
+          "type": "id"
+        },
+        "room": {
+          "type": "id"
+        }
+      },
+      "inputs": "registered scene room directory (read-only)",
+      "outputs": [
+        "result.json"
+      ],
+      "bindings": [
+        "packages",
+        "scenes"
+      ],
+      "gpu": false,
+      "remote": false
+    },
+    "stair.candidates": {
+      "runner": "stair_candidates",
+      "purpose": "Design every stair family the building profile allows for the rise and compare footprints with the room interior",
+      "params": {
+        "profile": {
+          "enum": [
+            "generic",
+            "house",
+            "school",
+            "office",
+            "factory",
+            "warehouse"
+          ]
+        },
+        "rise_m": {
+          "type": "number",
+          "min": 2.0,
+          "max": 6.0
+        },
+        "room_interior_m": {
+          "type": "pair",
+          "min": 0.5,
+          "max": 50.0
+        },
+        "clearance_m": {
+          "type": "number",
+          "min": 0.0,
+          "max": 0.5
+        }
+      },
+      "inputs": "none",
+      "outputs": [
+        "result.json"
+      ],
+      "bindings": [
+        "buildingsgen",
+        "packages"
+      ],
+      "gpu": false,
+      "remote": false
+    },
+    "stair.build_usd": {
+      "runner": "stair_build",
+      "purpose": "Author the chosen stair family as a collider-bearing OpenUSD asset (pure OpenUSD backend)",
+      "params": {
+        "profile": {
+          "enum": [
+            "generic",
+            "house",
+            "school",
+            "office",
+            "factory",
+            "warehouse"
+          ]
+        },
+        "rise_m": {
+          "type": "number",
+          "min": 2.0,
+          "max": 6.0
+        },
+        "family": {
+          "enum": [
+            "straight",
+            "l_shaped",
+            "u_shaped"
+          ]
+        }
+      },
+      "inputs": "none",
+      "outputs": [
+        "stair.usda",
+        "traversal_path.json",
+        "result.json"
+      ],
+      "bindings": [
+        "buildingsgen",
+        "packages"
+      ],
+      "gpu": false,
+      "remote": false
+    },
+    "stair.check_usd": {
+      "runner": "stair_check",
+      "purpose": "Re-open the asset with OpenUSD and measure meshes, colliders, every rise, footprint, room fit and traversal path",
+      "params": {
+        "profile": {
+          "enum": [
+            "generic",
+            "house",
+            "school",
+            "office",
+            "factory",
+            "warehouse"
+          ]
+        },
+        "rise_m": {
+          "type": "number",
+          "min": 2.0,
+          "max": 6.0
+        },
+        "room_interior_m": {
+          "type": "pair",
+          "min": 0.5,
+          "max": 50.0
+        },
+        "clearance_m": {
+          "type": "number",
+          "min": 0.0,
+          "max": 0.5
+        },
+        "family": {
+          "enum": [
+            "straight",
+            "l_shaped",
+            "u_shaped"
+          ]
+        },
+        "expected_tread_count": {
+          "type": "integer",
+          "min": 1,
+          "max": 60
+        },
+        "expected_footprint_m": {
+          "type": "pair",
+          "min": 0.1,
+          "max": 50.0
+        }
+      },
+      "inputs": "stair.usda produced by stair.build_usd in the same execution",
+      "outputs": [
+        "result.json"
+      ],
+      "bindings": [
+        "buildingsgen",
+        "packages"
+      ],
+      "gpu": false,
+      "remote": false
+    }
+  }
+}

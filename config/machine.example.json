@@ -1,0 +1,9 @@
+{
+  "python": "C:\\Python312\\python.exe",
+  "pythonw": "C:\\Python312\\pythonw.exe",
+  "git": "D:\\git\\Git\\cmd\\git.exe",
+  "codex": "ABSOLUTE_PATH_TO_NATIVE_CODEX_EXE",
+  "claude": "ABSOLUTE_PATH_TO_NATIVE_CLAUDE_EXE",
+  "expected_repo": "E:\\Github\\Building-Generation-Validation",
+  "expected_origin": "https://github.com/JIMMY081105/Building-Generation-Validation.git"
+}
