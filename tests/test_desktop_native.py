@@ -2,7 +2,7 @@
 import math
 import unittest
 
-from tools.verify_desktop import avatar_geometry_valid
+from tools.verify_desktop import avatar_geometry_valid, avatar_videos_valid
 
 
 def portraits():
@@ -15,6 +15,26 @@ def portraits():
 
 
 class PortraitEvidenceTests(unittest.TestCase):
+    def videos(self):
+        data = portraits()
+        for name, item in data.items():
+            item["video"] = dict(src="/assets/" + name + ".mp4", readyState=4, muted=True, loop=True,
+                                 error=None, objectFit="contain", opacity=1, playbackRate=1,
+                                 width=256, height=256, rect={"width":80,"height":80})
+        return data
+
+    def test_equal_silent_local_video_portraits_pass(self):
+        self.assertTrue(avatar_videos_valid(self.videos()))
+
+    def test_video_distortion_remote_audio_missing_and_unequal_layout_rejected(self):
+        for field, value in (("width", 512), ("muted", False), ("loop", False),
+                             ("readyState", 0), ("src", "https://invalid/avatar.mp4"),
+                             ("objectFit", "fill"), ("opacity", 0), ("error", 4)):
+            data = self.videos(); data["lucy"]["video"][field] = value
+            self.assertFalse(avatar_videos_valid(data), field)
+        data = self.videos(); data["lucy"]["video"]["rect"]["width"] = 160
+        self.assertFalse(avatar_videos_valid(data))
+
     def test_original_sprite_cell_keeps_aspect(self):
         self.assertTrue(avatar_geometry_valid(portraits()))
 

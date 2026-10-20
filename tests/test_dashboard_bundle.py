@@ -16,6 +16,9 @@ class DashboardBundleTests(unittest.TestCase):
         approved = {name: b.digest(b"fixture image") for name in b.AVATARS}
         self.avatar_patch = patch.object(b, "AVATARS", approved)
         self.avatar_patch.start(); self.addCleanup(self.avatar_patch.stop)
+        self.video_bytes = b"\x00\x00\x00\x18ftypisom approved video"
+        video_patch = patch.object(b, "AVATAR_VIDEOS", {name: b.digest(self.video_bytes) for name in b.AVATAR_VIDEOS})
+        video_patch.start(); self.addCleanup(video_patch.stop)
         self.root = self.base / "source"; self.root.mkdir()
         for name in b.FILES:
             file = self.root / name; file.parent.mkdir(parents=True, exist_ok=True)
@@ -32,6 +35,8 @@ class DashboardBundleTests(unittest.TestCase):
         (self.frozen / "assets").mkdir()
         for name in b.AVATARS:
             (self.frozen / "assets" / name).write_bytes(b"fixture image")
+        for name in b.AVATAR_VIDEOS:
+            (self.frozen / "assets" / name).write_bytes(self.video_bytes)
         files = {p.relative_to(self.frozen).as_posix(): b.digest(p.read_bytes())
                  for p in self.frozen.rglob("*") if p.is_file()}
         self.record = {"owner": b.OWNER, "files": files, "sha256": b.digest(b.canonical(files)),

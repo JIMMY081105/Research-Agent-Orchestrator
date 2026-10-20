@@ -66,102 +66,6 @@ namespace BgvSceneControl
         }
     }
 
-    internal static class Files
-    {
-        internal const string Runtime = @"E:\Github\Building-Generation-Validation\.runtime";
-        internal const string Owner = "BGV.Windows.SceneControl.Desktop.v1";
-        internal static readonly JavaScriptSerializer Json = new JavaScriptSerializer { MaxJsonLength = 2097152, RecursionLimit = 64 };
-        internal static string Safe(string name)
-        {
-            var path = Path.GetFullPath(name);
-            string part = path;
-            while (!String.IsNullOrEmpty(part))
-            {
-                if ((File.Exists(part) || Directory.Exists(part)) && (File.GetAttributes(part) & FileAttributes.ReparsePoint) != 0)
-                    throw new InvalidDataException("REPARSE_PATH");
-                var parent = Path.GetDirectoryName(part);
-                if (parent == part) break;
-                part = parent;
-            }
-            return path;
-        }
-        internal static string Hash(byte[] bytes)
-        {
-            using (var sha = SHA256.Create()) return BitConverter.ToString(sha.ComputeHash(bytes)).Replace("-", "").ToLowerInvariant();
-        }
-        internal static string HashFile(string path)
-        {
-            var info = new FileInfo(Safe(path));
-            if (info.Length > 67108864) throw new InvalidDataException("PACKAGE_FILE_TOO_LARGE");
-            using (var sha = SHA256.Create()) using (var stream = File.OpenRead(info.FullName))
-                return BitConverter.ToString(sha.ComputeHash(stream)).Replace("-", "").ToLowerInvariant();
-        }
-        internal static Dictionary<string, object> Read(string path)
-        {
-            var file = new FileInfo(Safe(path));
-            if (file.Length > 2097152) throw new InvalidDataException("METADATA_TOO_LARGE");
-            var result = Json.DeserializeObject(File.ReadAllText(file.FullName, Encoding.UTF8)) as Dictionary<string, object>;
-            if (result == null) throw new InvalidDataException("INVALID_METADATA");
-            return result;
-        }
-        internal static void Save(string path, object value)
-        {
-            path = Safe(path); var directory = Safe(Path.GetDirectoryName(path));
-            Directory.CreateDirectory(directory); Safe(directory);
-            var temporary = Safe(path + ".tmp");
-            File.WriteAllText(temporary, Json.Serialize(value), new UTF8Encoding(false));
-            if (File.Exists(path)) File.Replace(temporary, path, null); else File.Move(temporary, path);
-        }
-        private static void Inventory(string directory, string root, HashSet<string> found)
-        {
-            Safe(directory);
-            foreach (var child in Directory.GetFileSystemEntries(directory))
-            {
-                Safe(child);
-                if (Directory.Exists(child)) Inventory(child, root, found);
-                else
-                {
-                    var relative = child.Substring(root.Length + 1).Replace('\\', '/');
-                    if (relative != "manifest.json") found.Add(relative);
-                }
-            }
-        }
-        internal static string VerifyPackage(out string source)
-        {
-            var executable = Safe(Assembly.GetExecutingAssembly().Location);
-            var app = Path.GetDirectoryName(executable); var root = Safe(Path.GetDirectoryName(app));
-            var sha = Path.GetFileName(root);
-            if (!Regex.IsMatch(sha, "^[0-9a-f]{64}$") || Path.GetFileName(app) != "app" ||
-                !String.Equals(root, Path.Combine(Runtime, "desktop", "snapshots", sha), StringComparison.OrdinalIgnoreCase))
-                throw new InvalidDataException("PACKAGE_LOCATION_INVALID");
-            var record = Read(Path.Combine(root, "manifest.json"));
-            if (!record.ContainsKey("owner") || !Object.Equals(record["owner"], Owner) || !record.ContainsKey("sha256") || !Object.Equals(record["sha256"], sha))
-                throw new InvalidDataException("PACKAGE_IDENTITY_INVALID");
-            var files = record.ContainsKey("files") ? record["files"] as Dictionary<string, object> : null;
-            if (files == null || files.Count == 0 || files.Count > 512) throw new InvalidDataException("PACKAGE_FILESET_INVALID");
-            var ordered = new SortedDictionary<string, string>(StringComparer.Ordinal);
-            var aliases = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            foreach (var item in files)
-            {
-                var name = item.Key; var hash = item.Value as string;
-                if (!Regex.IsMatch(name, @"^[A-Za-z0-9_./ -]{1,240}$") || name.StartsWith("/", StringComparison.Ordinal) ||
-                    name.Split('/').Any(p => p.Length == 0 || p == "." || p == ".." || p.EndsWith(".", StringComparison.Ordinal) || p.EndsWith(" ", StringComparison.Ordinal)) ||
-                    name == "manifest.json" || hash == null || !Regex.IsMatch(hash, "^[0-9a-f]{64}$") || !aliases.Add(name))
-                    throw new InvalidDataException("PACKAGE_PATH_INVALID");
-                ordered.Add(name, hash);
-            }
-            var canonical = "{" + String.Join(",", ordered.Select(p => "\"" + p.Key + "\":\"" + p.Value + "\"")) + "}";
-            if (Hash(Encoding.UTF8.GetBytes(canonical)) != sha) throw new InvalidDataException("PACKAGE_MANIFEST_CHANGED");
-            var found = new HashSet<string>(StringComparer.Ordinal); Inventory(root, root, found);
-            if (!found.SetEquals(ordered.Keys) || !ordered.ContainsKey("app/SceneControl.exe") || !ordered.ContainsKey("source/desktop.py"))
-                throw new InvalidDataException("PACKAGE_EXTRA_OR_MISSING_FILE");
-            foreach (var item in ordered)
-                if (HashFile(Path.Combine(root, item.Key.Replace('/', Path.DirectorySeparatorChar))) != item.Value)
-                    throw new InvalidDataException("PACKAGE_CONTENT_CHANGED");
-            source = Safe(Path.Combine(root, "source")); return sha;
-        }
-    }
-
     internal sealed class ControlWindow : Form
     {
         private readonly Options options;
@@ -175,7 +79,7 @@ namespace BgvSceneControl
         private TaskCompletionSource<bool> navigationWaiter;
         private string packageSha = "UNVERIFIED", source, phase = "STARTING";
         private bool ensureBusy, recoveryArmed = true, backendAuthorized, captured, closed, healthBusy;
-        private int attempts;
+        private int attempts, reopenRequests;
         internal int ExitCode;
         internal ControlWindow(Options value)
         {
@@ -231,6 +135,15 @@ namespace BgvSceneControl
             if (WindowState == FormWindowState.Minimized) WindowState = options.Diagnostic ? FormWindowState.Normal : FormWindowState.Maximized;
             Show(); Activate(); Native.SetForegroundWindow(Handle);
         }
+        internal async void ReopenOwned()
+        {
+            BringToFrontOwned();
+            if (closed || options.Diagnostic || ensureBusy) return;
+            reopenRequests++; recoveryArmed = true; WriteWindow();
+            // Healthy re-open checks connection without navigating away from an unsent draft.
+            if (phase == "READY") await CheckHealth();
+            else await EnsureWave("Re-open connection check");
+        }
         private void SetStatus(string text) { if (!closed) { status.Text = text; message.Text = text; } }
         private void Fail(string text) { phase = "UNAVAILABLE"; ExitCode = 2; SetStatus(text); loading.Visible = true; loading.BringToFront(); WriteWindow(); }
         private void WriteWindow()
@@ -243,7 +156,7 @@ namespace BgvSceneControl
                     owner = Files.Owner, pid = process.Id, birth = process.StartTime.ToUniversalTime().ToFileTimeUtc().ToString(CultureInfo.InvariantCulture),
                     sha256 = packageSha, hwnd = Handle.ToInt64().ToString(CultureInfo.InvariantCulture), state = phase,
                     observed_at = DateTime.UtcNow.ToString("o"), client_width = ClientSize.Width, client_height = ClientSize.Height,
-                    dpi = Native.GetDpi(Handle), ensure_attempts = attempts, read_only = true, task_submission_enabled = true, model_calls = 0 });
+                    dpi = Native.GetDpi(Handle), ensure_attempts = attempts, reopen_requests = reopenRequests, read_only = true, task_submission_enabled = true, model_calls = 0 });
             }
             catch (IOException) { SetStatus("本地窗口证据暂不可写；监控未修改任何研究任务。"); }
             catch (UnauthorizedAccessException) { SetStatus("本地窗口证据权限不足。"); }
@@ -326,7 +239,7 @@ namespace BgvSceneControl
             // This host exposes only these fixed local task endpoints, never arbitrary URLs.
             if (method == "POST") return new[] { "/api/tasks", "/api/worker/turns", "/api/worker/approval", "/api/worker/cancel" }.Contains(path);
             if (method != "GET" && method != "HEAD") return false;
-            if (new[] { "/", "/api/health", "/api/status", "/assets/dashboard.css", "/assets/dashboard.js", "/assets/worker.css", "/assets/worker.js", "/assets/david.jpg", "/assets/lucy.jpg" }.Contains(path))
+            if (new[] { "/", "/api/health", "/api/status", "/assets/dashboard.css", "/assets/dashboard.js", "/assets/worker.css", "/assets/worker.js", "/assets/david.jpg", "/assets/lucy.jpg", "/assets/david.mp4", "/assets/lucy.mp4" }.Contains(path))
                 return true;
             if (method != "GET") return false;
             if (new[] { "/api/composer", "/api/worker/capabilities", "/api/worker/status" }.Contains(path)) return true;
@@ -442,6 +355,8 @@ Object.keys(selectors).forEach(function(key){
     var entry={found:true,loaded:loaded,naturalWidth:nw,naturalHeight:nh,gridColumns:3,gridRows:2,objectFit:is.objectFit,overflowX:fs.overflowX,overflowY:fs.overflowY,src:image.getAttribute('src'),frame:rect(frame),image:rect(image),frameContentWidth:fw,frameContentHeight:fh,imageContentWidth:iw,imageContentHeight:ih};
     entry.checks={loaded:loaded,frameMatchesCellAspect:loaded&&fw>0&&fh>0&&Math.abs(fw/fh-cellAspect)<=0.02,spriteMatchesNaturalAspect:loaded&&iw>0&&ih>0&&Math.abs(iw/ih-nw/nh)<=0.02,singleCellFitsFrame:fw>0&&fh>0&&Math.abs(iw/3-fw)<=1&&Math.abs(ih/2-fh)<=1,frameClipsSprite:['clip','hidden'].indexOf(fs.overflowX)>=0&&['clip','hidden'].indexOf(fs.overflowY)>=0,objectFitPreservesRatio:is.objectFit==='contain',sourceFixed:entry.src==='/assets/'+key+'.jpg'};
     result.avatars[key]=entry;
+    var clip=document.querySelector('[data-avatar-video='+key+']');
+    if(clip){var cs=getComputedStyle(clip);entry.video={src:clip.getAttribute('src'),readyState:clip.readyState,width:clip.videoWidth,height:clip.videoHeight,currentTime:clip.currentTime,muted:clip.muted,loop:clip.loop,paused:clip.paused,playbackRate:clip.playbackRate,objectFit:cs.objectFit,opacity:parseFloat(cs.opacity),rect:rect(clip),error:clip.error?clip.error.code:null};}
 });
 var panels=['mission','gpu','codex','claude'],critical=['connection','refresh','runtime','gpuState','gpuUtil','codexState','claudeState','observed','gpuObserved','composerPrompt','composerSubmit'];
 result.panels={};panels.forEach(function(k){var e=result.elements[k];result.panels[k]=Object.assign({},e.rect||{},{visible:e.visible,insideViewport:e.insideViewport});});
@@ -524,6 +439,23 @@ return result;})()";
                 if (closed) return;
                 var beforeCapture = ObserveCaptureWindow();
                 var layout = Files.Json.DeserializeObject(text) as Dictionary<string, object>;
+                // Only this new diagnostic window is exercised; no service or task action.
+                const string avatarSampler = @"window.__bgvAvatarSample=function(){var r={};document.querySelectorAll('[data-avatar-video]').forEach(function(v){r[v.dataset.avatarVideo]={frames:v.getVideoPlaybackQuality().totalVideoFrames,paused:v.paused,time:v.currentTime};});return r;};window.__bgvAvatarA=window.__bgvAvatarSample();";
+                await web.CoreWebView2.ExecuteScriptAsync(avatarSampler);
+                await Task.Delay(350); if (closed) return;
+                await web.CoreWebView2.ExecuteScriptAsync("window.__bgvAvatarB=window.__bgvAvatarSample();document.querySelector('[data-pause]').click();");
+                await Task.Delay(150); if (closed) return;
+                await web.CoreWebView2.ExecuteScriptAsync("window.__bgvAvatarC=window.__bgvAvatarSample();");
+                await Task.Delay(300); if (closed) return;
+                await web.CoreWebView2.ExecuteScriptAsync("window.__bgvAvatarD=window.__bgvAvatarSample();document.querySelector('[data-pause]').click();");
+                await Task.Delay(350); if (closed) return;
+                var videoText = await web.CoreWebView2.ExecuteScriptAsync(@"(function(){var e=window.__bgvAvatarSample(),r={};['david','lucy'].forEach(function(k){var a=window.__bgvAvatarA[k],b=window.__bgvAvatarB[k],c=window.__bgvAvatarC[k],d=window.__bgvAvatarD[k];r[k]={advanced:!!a&&!!b&&!a.paused&&!b.paused&&b.frames>a.frames,pausedHeld:!!c&&!!d&&c.paused&&d.paused&&Math.abs(d.time-c.time)<0.02,resumed:!!d&&!!e[k]&&!e[k].paused&&e[k].frames>d.frames};});return r;})()");
+                var avatarMotion = Files.Json.DeserializeObject(videoText) as Dictionary<string, object>;
+                if (layout != null) layout["avatarMotion"] = avatarMotion;
+                bool videosPassed = avatarMotion != null && avatarMotion.Count == 2 && avatarMotion.Values.All(v => {
+                    var item = v as Dictionary<string, object>;
+                    return item != null && item.Count == 3 && item.Values.All(x => Object.Equals(x, true));
+                });
                 var checks = layout == null || !layout.ContainsKey("checks") ? null : layout["checks"] as Dictionary<string, object>;
                 bool layoutPassed = checks != null && checks.Count == 7 && checks.Values.All(v => Object.Equals(v, true));
                 var document = layout == null ? null : layout["document"] as Dictionary<string, object>;
@@ -553,7 +485,7 @@ return result;})()";
                     { "geometry_stable_during_probe", beforeProbe.SameGeometry(beforeCapture) },
                     { "geometry_stable_during_capture", beforeCapture.SameGeometry(afterCapture) }
                 };
-                bool passed = layoutPassed && nativeChecks.Values.All(v => Object.Equals(v, true));
+                bool passed = layoutPassed && videosPassed && nativeChecks.Values.All(v => Object.Equals(v, true));
                 Files.Save(Path.Combine(directory, "native.json"), new { schema = 1, owner = Files.Owner, run_id = options.Id,
                     app_path = Assembly.GetExecutingAssembly().Location, process_birth = process.StartTime.ToUniversalTime().ToFileTimeUtc().ToString(CultureInfo.InvariantCulture),
                     source_sha256 = sourceHash, bundle_sha256 = options.Smoke ? null : packageSha, smoke_id = options.Smoke ? options.Id : null,
@@ -625,6 +557,11 @@ return result;})()";
             try { options = Options.Parse(args); } catch (Exception) { options = new Options { Error = "启动参数无效；没有执行任何后台操作。" }; }
             string sid = WindowsIdentity.GetCurrent().User.Value;
             string suffix = sid + (options.Smoke ? ".Smoke." + options.Id : options.Verify ? ".Verify." + options.Id : "");
+            if (!options.Diagnostic && options.Error == null)
+            {
+                try { string fixedSource; suffix += ".Version." + Files.VerifyPackage(out fixedSource); }
+                catch (Exception) { options.Error = "Installed package verification failed; existing tasks are unchanged."; suffix += ".Invalid." + Guid.NewGuid().ToString("D"); }
+            }
             bool created;
             using (var mutex = new Mutex(false, @"Local\BGV.SceneControl.Desktop." + suffix, out created))
             {
@@ -642,7 +579,7 @@ return result;})()";
                 using (var window = new ControlWindow(options))
                 {
                     var registration = ThreadPool.RegisterWaitForSingleObject(signal, delegate {
-                        if (!window.IsDisposed && window.IsHandleCreated) try { window.BeginInvoke(new Action(window.BringToFrontOwned)); } catch (InvalidOperationException) { }
+                        if (!window.IsDisposed && window.IsHandleCreated) try { window.BeginInvoke(new Action(window.ReopenOwned)); } catch (InvalidOperationException) { }
                     }, null, Timeout.Infinite, false);
                     Application.Run(window); registration.Unregister(null); return window.ExitCode;
                 }

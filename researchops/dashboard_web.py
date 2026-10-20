@@ -53,6 +53,10 @@ PAGE = PAGE.replace('<form class="cy-composer" id="composerForm"', '<div class="
 PAGE = PAGE.replace('</form><div class="cy-mission-sidebar">', '</form></div><div class="cy-mission-sidebar">')
 PAGE = PAGE.replace('SCENE CONTROL · 监控与文本分析', 'SCENE CONTROL · Codex 执行与审核')
 PAGE = PAGE.replace('状态刷新不派任务 · 提交仅入队文本分析', 'Codex 工作即时派发 · 文本分析沿用原队列')
+for _character in ('david', 'lucy'):
+    _old = '<img class="cy-sprite" data-avatar-source="' + _character + '" src="/assets/' + _character + '.jpg" alt="">'
+    _clip = '<video class="cy-avatar-video" data-avatar-video="' + _character + '" src="/assets/' + _character + '.mp4" autoplay muted loop playsinline preload="auto" aria-hidden="true" disablepictureinpicture></video>'
+    PAGE = PAGE.replace(_old, _old + _clip)
 
 CSS = r'''
     #scene-cyber-deck {
@@ -148,6 +152,9 @@ CSS = r'''
     #scene-cyber-deck .cy-avatar-wrap::after {border-bottom:1px solid;border-right:1px solid;bottom:0;right:0;}
     #scene-cyber-deck .cy-character {--cy-frame-x:0%;--cy-frame-y:0%;width:80px;height:80px;aspect-ratio:1;position:relative;flex-shrink:0;overflow:clip;border:1px solid var(--cy-line);border-radius:11px;transform-origin:center 80%;animation:cy-character-breathe 5.6s ease-in-out infinite,cy-character-blink 6.1s steps(1,end) infinite;}
     #scene-cyber-deck .cy-sprite {position:absolute;left:0;top:0;display:block;width:300%;height:200%;max-width:none;max-height:none;object-fit:contain;transform:translate(var(--cy-frame-x),var(--cy-frame-y));pointer-events:none;}
+    #scene-cyber-deck .cy-avatar-video {position:absolute;inset:0;display:block;width:100%;height:100%;object-fit:contain;opacity:0;pointer-events:none;}
+    #scene-cyber-deck .cy-avatar-video.cy-video-ready {opacity:1;}
+    #scene-cyber-deck .cy-character.cy-live-avatar {animation:none!important;transform:none;}
     #scene-cyber-deck .cy-lucy {animation-delay:-1.2s,-2.6s;}
     #scene-cyber-deck .cy-running [data-active="true"] .cy-character {animation-name:cy-character-breathe,cy-character-focus;animation-duration:4.2s,5.2s;}
     #scene-cyber-deck.cy-motion-off .cy-character {animation:none!important;transform:none;--cy-frame-x:0%;--cy-frame-y:0%;}
@@ -351,6 +358,14 @@ JS = r'''(() => {
   const reduced = matchMedia('(prefers-reduced-motion: reduce)');
   const state = {data:null, transport:'unknown', receivedAt:null, lastGpu:null, busy:false, stages:new Map(), transferTimer:null, motion:true, visualPaused:false};
   const GPU_MAX_AGE_MS = 90000;
+  function syncAvatarMotion() {
+    const shouldPlay = state.motion && !reduced.matches && !state.visualPaused && !document.hidden;
+    root.querySelectorAll('[data-avatar-video]').forEach(video => {
+      video.muted = true; video.defaultMuted = true; video.loop = true; video.playbackRate = 1;
+      if (shouldPlay) { const playback = video.play(); if (playback) playback.catch(() => {}); }
+      else video.pause();
+    });
+  }
   function applyMotion() {
     root.classList.toggle('cy-motion-off', !state.motion || reduced.matches);
     root.classList.toggle('cy-paused', state.visualPaused);
@@ -360,6 +375,7 @@ JS = r'''(() => {
     set('[data-pause]', state.visualPaused ? '继续动效' : '暂停动效');
     q('[data-pause]').setAttribute('aria-pressed', String(state.visualPaused));
     if (!state.motion || reduced.matches) clearTransfer();
+    syncAvatarMotion();
   }
   function clearTransfer() {
     clearTimeout(state.transferTimer); root.classList.remove('cy-transfer'); delete root.dataset.transfer;
@@ -668,6 +684,13 @@ JS = r'''(() => {
   q('[data-pause]').addEventListener('click', () => { state.visualPaused = !state.visualPaused; applyMotion(); });
   q('[data-motion]').addEventListener('change', () => { state.motion = q('[data-motion]').checked; applyMotion(); });
   reduced.addEventListener('change', applyMotion);
+  root.querySelectorAll('[data-avatar-video]').forEach(video => {
+    const ready = () => { video.classList.add('cy-video-ready'); video.parentElement.classList.add('cy-live-avatar'); syncAvatarMotion(); };
+    video.addEventListener('loadeddata', ready);
+    video.addEventListener('error', () => { video.pause(); video.classList.remove('cy-video-ready'); video.parentElement.classList.remove('cy-live-avatar'); });
+    if (video.readyState >= 2) ready();
+  });
+  document.addEventListener('visibilitychange', syncAvatarMotion);
   applyMotion(); render(); refresh(); updateComposer(); loadComposer(); restoreReceipt();
   setInterval(refresh, 2000);
   setInterval(pollReceipt, 2000);

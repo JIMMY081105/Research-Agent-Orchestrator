@@ -13,6 +13,8 @@ audit timestamps and the shared review budget day stay UTC.
 
 ## Restart, sleep and re-open
 
+The fixed desktop/start-menu entry uses `SceneControlLauncher.exe`. On every open it reads the current activation, verifies the complete accepted snapshot and its own matching binary, then opens that version. It prevents an old pinned version from silently staying in use after an upgrade. No model is called during connection. Normal windows are unique per accepted version: a still-open old version cannot absorb a new-version launch. Opening the same version again focuses that window and rechecks the connection. A healthy re-open preserves the unsent draft.
+
 The native window opens first, verifies its fixed package and checks its own
 service. When the service has exited, opening requests a start of the exact
 owned Windows task. A live matching PID is never killed or duplicated. Another
@@ -65,8 +67,10 @@ Complete source, tests, templates, compiled executable, three pinned DLLs, icon,
 configuration and approved avatar bytes are bound in an independent desktop
 manifest. build.json binds compiler inputs and output hashes. A current complete
 regression and fresh tools-disabled Claude review are required before freezing.
-This new desktop feature has one bounded three-review cycle; the old exhausted
-UI cycle is retained and unchanged. All reviews share the existing 50/UTC-day
+The original desktop-feature audit cycle and all calls are retained. It defaults
+to three reviews; the explicit user extension authorizes ten TOTAL in the same
+cycle, including failures and prior calls. No new cycle, reset or refund is permitted.
+The old exhausted UI cycle is retained and unchanged. All reviews share the existing 50/UTC-day
 ledger, with no refunds or resets.
 
 Local evidence is in `.runtime/desktop`. Fixture layout tests are explicitly
