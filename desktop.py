@@ -1,6 +1,7 @@
 """Fixed desktop bundle entry point. Only the owned UI service can be recovered."""
 import argparse
 import json
+import os
 from pathlib import Path
 import socket
 import subprocess
@@ -59,7 +60,11 @@ def ensure(source, runtime, expected_hash):
     script = source / "tools/desktop.ps1"
     run = subprocess.run([POWERSHELL, "-NoProfile", "-NonInteractive", "-File", str(script),
                           "-Mode", "EnsureService", "-ExpectedHash", expected_hash],
-                         capture_output=True, text=True, timeout=20, creationflags=0x08000000)
+                         capture_output=True, text=True, timeout=20, creationflags=0x08000000,
+                         # A Python parent can inherit PowerShell 7's PSModulePath.
+                         # Use only this Windows PowerShell host's built-in modules.
+                         # This changes the child environment, never user/machine settings.
+                         env={**os.environ, "PSModulePath": str(Path(POWERSHELL).parent / "Modules")})
     if run.returncode:
         try:
             reason = json.loads(run.stdout).get("state", "SERVICE_START_REFUSED")
