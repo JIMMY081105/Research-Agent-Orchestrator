@@ -16,6 +16,9 @@ if($ExpectedHash -and $ExpectedHash -cne $a.sha256){throw 'Desktop version chang
 $bundle=Join-Path $directory ('snapshots\'+$a.sha256)
 $source=Join-Path $bundle 'source'
 $app=Join-Path $bundle 'app\SceneControl.exe'
+$launcher=Join-Path $directory 'SceneControlLauncher.exe'
+$launcherSource=Join-Path $bundle 'app\SceneControlLauncher.exe'
+$launcherReceipt=Join-Path $directory 'launcher.json'
 if([IO.Path]::GetFullPath($a.source) -cne $source){throw 'Desktop source outside snapshot'}
 foreach($path in @($runtime,$directory,$bundle,$source,$app,$python,$pythonw)){
  if(-not(Test-Path -LiteralPath $path)){throw 'Desktop required path unavailable'}
@@ -38,15 +41,28 @@ $existing=Get-ScheduledTask -TaskName $taskName -TaskPath '\' -ErrorAction Silen
 if($existing){Assert-Owned $existing}
 $links=@((Join-Path ([Environment]::GetFolderPath('DesktopDirectory')) 'BGV Scene Control.lnk'),(Join-Path ([Environment]::GetFolderPath('Programs')) 'BGV Scene Control.lnk'))
 $shell=New-Object -ComObject WScript.Shell
+function Assert-Launcher {
+ if((Test-Path -LiteralPath $launcher) -or (Test-Path -LiteralPath $launcherReceipt)){
+  foreach($path in @($launcher,$launcherReceipt)){
+   if(-not(Test-Path -LiteralPath $path -PathType Leaf)){throw 'Incomplete existing launcher ownership'}
+   $item=Get-Item -LiteralPath $path
+   while($item){if($item.Attributes -band [IO.FileAttributes]::ReparsePoint){throw 'Launcher reparse path rejected'};$item=$item.Parent}
+  }
+  $prior=Get-Content -LiteralPath $launcherReceipt -Raw|ConvertFrom-Json
+  if($prior.owner -cne $owner -or $prior.sha256 -cne (Get-FileHash -LiteralPath $launcher -Algorithm SHA256).Hash.ToLowerInvariant()){throw 'Existing launcher ownership mismatch'}
+ }
+}
+Assert-Launcher
 function Assert-Link($path){
  if(Test-Path -LiteralPath $path){
   $link=$shell.CreateShortcut($path)
-  if($link.TargetPath -cne $app -or $link.Arguments){throw 'Same-name shortcut belongs to another app/version'}
+  if(($link.TargetPath -cne $app -and $link.TargetPath -cne $launcher) -or $link.Arguments){throw 'Same-name shortcut belongs to another app/version'}
  }
 }
 if($Mode -eq 'Install'){
  if($existing){throw 'Desktop task already installed; no task overwritten'}
  foreach($path in $links){Assert-Link $path}
+ if(-not(Test-Path -LiteralPath $launcherSource -PathType Leaf)){throw 'Accepted launcher missing'}
  $action=New-ScheduledTaskAction -Execute $pythonw -Argument $arguments -WorkingDirectory $source
  $when=(Get-Date).AddMinutes(1)
  $triggers=@((New-ScheduledTaskTrigger -Once -At $when),(New-ScheduledTaskTrigger -AtLogOn -User $sid))
@@ -73,9 +89,20 @@ if($Mode -eq 'Install'){
   if(-not $?){throw 'Legacy UI disable failed'}
   if($legacy.State -eq 'Running'){Stop-ScheduledTask -TaskName 'BGV-ResearchOps-UI-v1' -TaskPath '\'}
  }
+ # Only an absent launcher or a verified owned one may be replaced. Preserve old bytes.
+ $stamp=[Guid]::NewGuid().ToString()
+ if(Test-Path -LiteralPath $launcher){
+  Copy-Item -LiteralPath $launcher -Destination (Join-Path $directory ('launcher-backup-'+$stamp+'.exe'))
+  Copy-Item -LiteralPath $launcherReceipt -Destination (Join-Path $directory ('launcher-backup-'+$stamp+'.json'))
+ }
+ $temporary=Join-Path $directory ('launcher-'+$stamp+'.tmp')
+ Copy-Item -LiteralPath $launcherSource -Destination $temporary
+ if((Get-FileHash -LiteralPath $temporary).Hash -cne (Get-FileHash -LiteralPath $launcherSource).Hash){throw 'Launcher copy changed'}
+ if(Test-Path -LiteralPath $launcher){[IO.File]::Replace($temporary,$launcher,$null)}else{[IO.File]::Move($temporary,$launcher)}
+ @{owner=$owner;sha256=(Get-FileHash -LiteralPath $launcher).Hash.ToLowerInvariant();bundle_sha256=$a.sha256;installed_at=(Get-Date).ToUniversalTime().ToString('o')}|ConvertTo-Json|Set-Content -LiteralPath $launcherReceipt -Encoding utf8
  foreach($path in $links){
   $link=$shell.CreateShortcut($path)
-  $link.TargetPath=$app;$link.WorkingDirectory=(Split-Path -Parent $app);$link.Description='BGV Scene Control — native read-only research dashboard';$link.IconLocation=(Join-Path $bundle 'app\SceneControl.ico')
+  $link.TargetPath=$launcher;$link.WorkingDirectory=$directory;$link.Description='BGV Scene Control — native read-only research dashboard';$link.IconLocation=(Join-Path $bundle 'app\SceneControl.ico')
   $link.Save()
  }
  @{owner=$owner;sha256=$a.sha256;registered_at=(Get-Date).ToUniversalTime().ToString('o');due_at=$when.ToUniversalTime().ToString('o');manual_start_used=$false;shortcuts=$links;legacy=$legacyRecord}|ConvertTo-Json -Depth 6|Set-Content -LiteralPath (Join-Path $directory 'installation.json') -Encoding utf8
@@ -104,7 +131,7 @@ if($Mode -in @('Disable','Enable')){
  else{Enable-ScheduledTask -TaskName $taskName -TaskPath '\'|Out-Null}
  $existing=Get-ScheduledTask -TaskName $taskName -TaskPath '\'
 }
-if($Mode -eq 'Open'){Start-Process -FilePath $app -WorkingDirectory (Split-Path -Parent $app)}
+if($Mode -eq 'Open'){if(-not(Test-Path -LiteralPath $launcher)){throw 'Stable launcher is not installed'};Start-Process -FilePath $launcher -WorkingDirectory $directory}
 if(-not $existing){throw 'Desktop service is not installed'}
 $info=Get-ScheduledTaskInfo -TaskName $taskName -TaskPath '\'
-@{owner=$owner;task=$taskName;sha256=$a.sha256;state=$existing.State.ToString();enabled=$existing.Settings.Enabled;last_run=(Utc-OrNull $info.LastRunTime);last_result=$info.LastTaskResult;next_run=(Utc-OrNull $info.NextRunTime);wake=$existing.Settings.WakeToRun;restart_count=$existing.Settings.RestartCount;source=$source;app=$app;shortcuts=$links}|ConvertTo-Json -Depth 6
+@{owner=$owner;task=$taskName;sha256=$a.sha256;state=$existing.State.ToString();enabled=$existing.Settings.Enabled;last_run=(Utc-OrNull $info.LastRunTime);last_result=$info.LastTaskResult;next_run=(Utc-OrNull $info.NextRunTime);wake=$existing.Settings.WakeToRun;restart_count=$existing.Settings.RestartCount;source=$source;app=$app;launcher=$launcher;shortcuts=$links}|ConvertTo-Json -Depth 6

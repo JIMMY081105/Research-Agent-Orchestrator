@@ -12,7 +12,7 @@ import uuid
 sys.dont_write_bytecode = True
 ROOT = Path(__file__).resolve().parents[1]
 COMPILER = Path(r"C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe")
-INPUTS = ("native/SceneControl.cs", "native/SceneControl.manifest", "tools/build_desktop.py", "config/desktop-dependencies.json")
+INPUTS = ("native/SceneControl.cs", "native/SceneControl.manifest", "native/DesktopFiles.cs", "native/SceneControlLauncher.cs", "tools/build_desktop.py", "config/desktop-dependencies.json")
 
 def digest(path):
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
@@ -58,12 +58,19 @@ def main():
     refs.extend(app / name for name in ("Microsoft.Web.WebView2.Core.dll", "Microsoft.Web.WebView2.WinForms.dll"))
     command = [str(COMPILER), "/nologo", "/target:winexe", "/platform:x64", "/langversion:5", "/optimize+", "/debug-", "/warn:4",
                "/out:" + str(output), "/win32manifest:" + str(ROOT / INPUTS[1]), "/win32icon:" + str(app / "SceneControl.ico")]
-    command += ["/reference:" + str(ref) for ref in refs] + [str(ROOT / INPUTS[0])]
+    command += ["/reference:" + str(ref) for ref in refs] + [str(ROOT / INPUTS[0]), str(ROOT / "native/DesktopFiles.cs")]
     run = subprocess.run(command, capture_output=True, text=True, timeout=90, creationflags=0x08000000)
     (folder / "compiler.txt").write_text(run.stdout + run.stderr, encoding="utf-8")
     if run.returncode:
         print(run.stdout + run.stderr)
         raise SystemExit(run.returncode)
+    launcher_command = [arg for arg in command if not arg.endswith("SceneControl.cs") and not arg.endswith("DesktopFiles.cs") and not arg.startswith("/out:")]
+    launcher_command += ["/out:" + str(app / "SceneControlLauncher.exe"), str(ROOT / "native/SceneControlLauncher.cs"), str(ROOT / "native/DesktopFiles.cs")]
+    launcher = subprocess.run(launcher_command, capture_output=True, text=True, timeout=90, creationflags=0x08000000)
+    (folder / "launcher-compiler.txt").write_text(launcher.stdout + launcher.stderr, encoding="utf-8")
+    if launcher.returncode:
+        print(launcher.stdout + launcher.stderr)
+        raise SystemExit(launcher.returncode)
     if inputs != {name: digest(ROOT / name) for name in INPUTS}:
         raise SystemExit("BUILD_INPUT_CHANGED")
     binary = output.read_bytes(); pe = struct.unpack_from("<I", binary, 60)[0]

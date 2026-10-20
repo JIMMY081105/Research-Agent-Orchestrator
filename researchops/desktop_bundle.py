@@ -13,20 +13,22 @@ SOURCE_FILES = dashboard_bundle.FILES + (
     "desktop.py", "researchops/desktop_bundle.py", "researchops/desktop_recovery.py",
     "tools/desktop.ps1", "tools/build_desktop.py", "tools/review_desktop.py",
     "tools/test_desktop.py", "tools/verify_desktop.py", "native/SceneControl.cs",
-    "native/SceneControl.manifest", "config/desktop-dependencies.json", "DESKTOP.md",
+    "native/SceneControl.manifest", "native/DesktopFiles.cs", "native/SceneControlLauncher.cs",
+    "config/desktop-dependencies.json", "DESKTOP.md",
     "tests/test_desktop_bundle.py", "tests/test_desktop_recovery.py",
-    "tests/test_desktop_native.py",
+    "tests/test_desktop_native.py", "tests/test_desktop_launcher.py", "tests/test_desktop_review.py",
     "worker.py", "researchops/worker_rpc.py", "researchops/worker_service.py", "researchops/worker_review.py",
     "researchops/winproc.py", "tools/worker.ps1", "config/worker-AGENTS.md", "WORKER.md",
     "tests/test_worker_rpc.py", "tests/test_worker_service.py",
 )
 APP_FILES = (
     "SceneControl.exe", "Microsoft.Web.WebView2.Core.dll", "Microsoft.Web.WebView2.WinForms.dll",
-    "WebView2Loader.dll", "SceneControl.ico",
+    "WebView2Loader.dll", "SceneControl.ico", "SceneControlLauncher.exe",
 )
 DEPENDENCY_FILES = frozenset(APP_FILES[1:4])
 BUILD_INPUTS = (
-    "native/SceneControl.cs", "native/SceneControl.manifest", "tools/build_desktop.py",
+    "native/SceneControl.cs", "native/SceneControl.manifest", "native/DesktopFiles.cs",
+    "native/SceneControlLauncher.cs", "tools/build_desktop.py",
     "config/desktop-dependencies.json",
 )
 canonical = dashboard_bundle.canonical
