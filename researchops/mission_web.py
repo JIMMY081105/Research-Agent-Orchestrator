@@ -111,7 +111,8 @@ JS = r'''
    panels[engine]={panel,key,values,rail,log,follow,state:panel.querySelector('[data-'+key+'-state]'),phase:panel.querySelector('[data-'+key+'-phase]')};
  }
  let worker=null, observation=null, channel='analysis', threadKey='', transition=null, transferTimer=null;
- function isFresh(){const age=Date.now()-Date.parse(observation?.value?.observed_at),workerAge=Date.now()-(worker?.receivedAt||0);return observation?.fresh===true&&worker?.fresh===true&&Number.isFinite(age)&&age>=-60000&&age<15000&&workerAge>=-60000&&workerAge<15000;}
+ function statusFresh(){const age=Date.now()-Date.parse(observation?.value?.observed_at);return observation?.fresh===true&&Number.isFinite(age)&&age>=-60000&&age<15000;}
+ function isFresh(){const workerAge=Date.now()-(worker?.receivedAt||0);return statusFresh()&&worker?.fresh===true&&workerAge>=-60000&&workerAge<15000;}
  function rows(log,items){
    const key=JSON.stringify(items);if(log.dataset.key===key)return;const follow=log.dataset.follow==='true',top=log.scrollTop;
    log.dataset.key=key;log.replaceChildren(...items.map(item=>{const li=make('li'), stamp=make('time','',time(item.created));li.append(stamp,document.createTextNode(item.text));return li;}));
@@ -187,6 +188,16 @@ JS = r'''
        if(!entries.length)entries.push({created:null,text:'尚无已登记阶段记录；不会推测其他交互会话。'});
      }
      entries.sort((a,b)=>(Date.parse(a.created)||0)-(Date.parse(b.created)||0));rows(p.log,entries.slice(-60));
+     if(statusFresh()&&observed.state==='RUNNING'&&(!fresh||!enabled||!isBusy)){
+       p.panel.dataset.progress=engine==='codex'?'executing':'reviewing';
+       set(p.state,engine==='codex'?'EXECUTING · 受限队列':'REVIEWING · 受限队列');
+       set(p.values.model,'未上报');set(p.values.effort,'未上报');set(p.values.mode,'受限队列 · 工具禁用');
+       p.values.model.title='当前登记队列没有上报实际模型，不使用历史 worker 模型代替。';
+       set(p.phase,'当前登记阶段：'+(observed.active_attempts||[]).map(a=>short(a.stage,60)).filter(Boolean).join(' / '));
+       set(p.panel.querySelector('[data-'+p.key+'-sub]'),'已登记队列的实际运行观测；与原生 worker 的连接状态分开。');
+       Array.from(p.rail.children).forEach((e,i)=>e.dataset.current=String(i===1));
+       rows(p.log,(observed.active_attempts||[]).map(a=>({created:a.created,text:'受限队列 · '+short(a.stage||'阶段未上报',120)})));
+     }
    }
  }
  document.addEventListener('bgv:status',event=>{observation=event.detail;refresh();});

@@ -236,6 +236,9 @@ def main():
         check('unsupported_pass_is_not_presented_as_ready', browser.wait("document.querySelector('[data-claude-state]').textContent.includes('UNVERIFIED')&&!document.querySelector('.cy-chat-thread').textContent.includes('COMPLETED')"))
         fixture.review_supported = True;refresh()
         browser.wait("document.querySelector('[data-claude-state]').textContent.includes('可继续下一步')")
+        check('bounded_queue_activity_survives_native_worker_offline', browser.evaluate("(()=>{document.dispatchEvent(new CustomEvent('bgv:worker',{detail:{fresh:false,enabled:false}}));document.dispatchEvent(new CustomEvent('bgv:status',{detail:{fresh:true,value:{observed_at:new Date().toISOString(),engines:{codex:{state:'RUNNING',active_attempts:[{stage:'execute',created:new Date().toISOString()}]}}}}}));return document.querySelector('.cy-code').dataset.progress==='executing'&&document.querySelector('[data-code-state]').textContent.includes('受限队列')&&!document.querySelector('.cy-code .cy-agent-specs').textContent.includes('DEMO CODEX MODEL')})()"))
+        refresh()
+        browser.wait("document.querySelector('[data-claude-state]').textContent.includes('可继续下一步')")
         browser.evaluate("document.querySelector('#workerPrompt').value='compare options';document.querySelector('#workerContext').value='quoted material';document.querySelector('#workerPrompt').dispatchEvent(new Event('input'))")
         fixture.fail_next = True
         browser.evaluate("document.querySelector('#workerSubmit').click()")
