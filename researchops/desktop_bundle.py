@@ -12,7 +12,7 @@ OWNER = "BGV.Windows.SceneControl.Desktop.v1"
 SOURCE_FILES = dashboard_bundle.FILES + (
     "desktop.py", "researchops/desktop_bundle.py", "researchops/desktop_recovery.py",
     "tools/desktop.ps1", "tools/build_desktop.py", "tools/review_desktop.py",
-    "tools/test_desktop.py", "tools/verify_desktop.py", "native/SceneControl.cs",
+    "tools/test_desktop.py", "tools/verify_desktop.py", "tools/verify_mission_ui.py", "native/SceneControl.cs",
     "native/SceneControl.manifest", "native/DesktopFiles.cs", "native/SceneControlLauncher.cs",
     "config/desktop-dependencies.json", "DESKTOP.md",
     "tests/test_desktop_bundle.py", "tests/test_desktop_recovery.py",

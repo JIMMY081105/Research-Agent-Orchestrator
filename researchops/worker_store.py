@@ -283,13 +283,17 @@ class Store:
                 session = sessions[0]["id"]
             if session is not None:
                 ident(session)
-            turns = [dict(r) for r in db.execute("SELECT id,session,mode,effort,state,created,updated,native_turn,response,reason,reworks FROM turns WHERE session=? ORDER BY created DESC LIMIT 20", (session,))]
+            turns = [dict(r) for r in db.execute("SELECT id,session,prompt,mode,effort,state,created,updated,native_turn,response,reason,reworks FROM turns WHERE session=? ORDER BY created DESC LIMIT 20", (session,))]
             approvals = [dict(r) for r in db.execute("SELECT id,turn,method,params,state FROM approvals WHERE session=? AND state='PENDING' ORDER BY created", (session,))]
-            events = [dict(r) for r in db.execute("SELECT kind,body,created FROM events WHERE session=? ORDER BY id DESC LIMIT 30", (session,))]
+            events = [dict(r) for r in db.execute("SELECT id,turn,kind,body,created FROM events WHERE session=? ORDER BY id DESC LIMIT 60", (session,))]
+            total = db.execute("SELECT count(*) FROM turns WHERE session=?", (session,)).fetchone()[0]
         for row in approvals:
             row["params"] = json.loads(row["params"])
+        events = list(reversed(events))
+        from .mission_status import workflow
         return {"capability": capability, "sessions": sessions, "session": session,
-                "turns": turns, "approvals": approvals, "events": list(reversed(events))}
+                "turns": turns, "approvals": approvals, "events": events,
+                "workflow": workflow(self.runtime, turns, sessions, events, total)}
 
 
 def merge_state(value, runtime):
