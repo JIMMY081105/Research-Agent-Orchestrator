@@ -18,7 +18,9 @@ def main():
     parser.add_argument("--output", required=True, type=Path)
     args = parser.parse_args()
     before = source_manifest(ROOT)
-    suite = unittest.defaultTestLoader.discover(str(ROOT / "tests"), "test_dashboard_*.py")
+    suite = unittest.TestSuite()
+    for pattern in ("test_dashboard_*.py", "test_mission_*.py"):
+        suite.addTests(unittest.defaultTestLoader.discover(str(ROOT / "tests"), pattern))
     discovered = suite.countTestCases()
     capture = io.StringIO()
     started = dt.datetime.now(dt.timezone.utc)

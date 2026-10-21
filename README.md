@@ -8,6 +8,8 @@
 > worker remains paused/unregistered; its current real dual-CLI and scheduler
 > acceptance is outstanding. Existing bounded analysis and read-only telemetry
 > remain separate. No server research task, building gate or GPU result is certified.
+> The conversation/stage view has its own fixed-snapshot acceptance; the earlier
+> 184-test record applies to `111b6f4`, not to a newly edited checkout.
 > Original downloads, private runtime and acceptance records are not published.
 
 
@@ -20,12 +22,8 @@ operations visibility**, using existing CLI subscription logins.
 status. No live jobs, prompts, sessions or research records are shown. This is not
 deployment or scientific acceptance evidence. [Static preview](docs/images/scene-control.png).*
 
-| Codex · David | Claude · Lucy |
-| :---: | :---: |
-| ![David animated portrait](docs/images/david-live.gif) | ![Lucy animated portrait](docs/images/lucy-live.gif) |
-
 The same cropped, silent clips used by the desktop are included in
-[`assets/avatars/`](assets/avatars). GIF previews play directly on this page;
+[`assets/avatars/`](assets/avatars). The full UI animation plays directly on this page;
 the application uses the pinned MP4 files at their original playback speed.
 
 ## What belongs here
@@ -49,10 +47,10 @@ a building, or authorize research changes.
 
 | Section | Controls and information |
 | --- | --- |
-| Mission | Send a task, continue an owned conversation, select skills/effort, read responses and exact approval requests |
+| Mission | Conversation above a bottom composer, references/skills above the input, optional system/history drawer |
 | Compute | Read-only SQZ GPU utilization, memory, temperature and observation freshness |
-| Codex / David | Actual registered execution state, task/session identity and compact animated portrait |
-| Claude / Lucy | Independent workspace-review state, session identity and review verdict |
+| Codex / David | Large outside-left portrait, reported model/effort/permissions, execution phase and scrolling public records |
+| Claude / Lucy | Large outside-right portrait, reported review settings, independent review phase and bounded feedback |
 
 - **Approval needed / Full Access:** native permission profiles captured per turn.
   Approval needed uses a Windows workspace sandbox; Full Access removes that sandbox
@@ -75,6 +73,11 @@ a building, or authorize research changes.
   and checks the local connection without discarding an unsent draft. If its owned
   service needs recovery, connection attempts are bounded; an explicitly disabled
   service stays disabled.
+
+The conversation UI shows the real registered execution/review cycle, slow running
+pulses and evidence-triggered handoffs. Model/effort/permission fields use backend
+records; missing values remain unknown. It does not reveal hidden reasoning or
+invent a research plan from prose. See [UI.md](UI.md) for controls and exact limits.
 
 Stack: Python 3.12 (primarily standard library), SQLite, C#/.NET Framework 4.8 with
 WebView2, HTML/CSS/JavaScript, PowerShell and Windows Task Scheduler.

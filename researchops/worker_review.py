@@ -92,7 +92,8 @@ def review_turn(runtime, store, turn, source_sha):
     save(folder / "package.json", package)
     call_id = charge(runtime, "claude", "independent-review:worker-turn:" + turn["id"] + ":" + ident, "review")
     record = {"id": ident, "session_id": session, "call_id": call_id, "binding_sha256": binding,
-              "created_at": utc(), "status": "CALL_RESERVED", "scope": snapshot["scope"]}
+              "created_at": utc(), "status": "CALL_RESERVED", "scope": snapshot["scope"],
+              "settings": {"model": None, "effort": "high", "permission_mode": "dontAsk", "tools_disabled": True}}
     save(folder / "result.json", record)
     def started(pid, birth):
         save(folder / "process.json", {"owner": "BGV.Windows.CodexWorker.v1", "pid": pid, "birth": birth,

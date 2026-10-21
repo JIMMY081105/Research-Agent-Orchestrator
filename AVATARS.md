@@ -4,9 +4,8 @@ David and Lucy use small, silent H.264 MP4 loops at their original playback spee
 The square portrait clips fit the existing frames without horizontal stretching.
 The original sprite portraits remain as the fallback if video loading fails.
 
-| Codex · David | Claude · Lucy |
-| :---: | :---: |
-| ![David animation](docs/images/david-live.gif) | ![Lucy animation](docs/images/lucy-live.gif) |
+The full interface is shown in [README.md](README.md); the agent portraits stay
+inside their own larger, outside-aligned panels. See [UI.md](UI.md).
 
 ## Files included in this repository
 

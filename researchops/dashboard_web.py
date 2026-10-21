@@ -529,6 +529,7 @@ JS = r'''(() => {
     const codex = renderEngine(data, 'codex', fresh), claude = renderEngine(data, 'claude', fresh);
     root.classList.toggle('cy-running', fresh && (codex === 'RUNNING' || claude === 'RUNNING'));
     renderMission(data, fresh); renderGpu(data, fresh);
+    document.dispatchEvent(new CustomEvent('bgv:status',{detail:{value:data,fresh}}));
     set('[data-connection]', '状态采集 / 只读 · ' + (fresh ? '已同步' : state.data ? 'STALE' : state.transport === 'failed' ? '无法读取' : 'UNKNOWN'));
     set('[data-caption]', fresh ? '状态缓存已同步；刷新不派任务。文本分析仅在点击提交后入队。' : state.data ? 'STALE · 无法确认当前状态；保留末次观测，运行标识与工作动效已停止。' : state.transport === 'failed' ? '无法读取后台状态缓存 · 当前状态 UNKNOWN。' : 'UNKNOWN · 正在读取后台状态缓存。');
     if (!fresh) { state.stages.clear(); clearTransfer(); }
@@ -696,3 +697,7 @@ JS = r'''(() => {
   setInterval(pollReceipt, 2000);
   setInterval(() => { if (state.data) { if (!isFresh()) render(); else set('[data-runtime]', runtime(state.data, true)); } }, 1000);
 })();'''
+
+from .mission_web import CSS as MISSION_CSS, JS as MISSION_JS
+CSS += MISSION_CSS
+JS += MISSION_JS

@@ -19,7 +19,7 @@ def main():
     before = source_manifest(ROOT)
     started = dt.datetime.now(dt.timezone.utc).isoformat()
     suite = unittest.TestSuite()
-    for pattern in ('test_dashboard*.py', 'test_desktop*.py', 'test_worker*.py'):
+    for pattern in ('test_dashboard*.py', 'test_desktop*.py', 'test_worker*.py', 'test_mission*.py'):
         suite.addTests(unittest.defaultTestLoader.discover(str(ROOT / 'tests'), pattern=pattern))
     count = suite.countTestCases()
     output = io.StringIO()

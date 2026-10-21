@@ -12,11 +12,11 @@ FILES = (
     "researchops/dashboard_state.py", "researchops/dashboard_gpu.py", "researchops/dashboard_web.py",
     "researchops/dashboard_bundle.py", "config/dashboard.example.json", "tools/dashboard.ps1",
     "tools/review_dashboard.py", "tools/verify_dashboard.py", "tools/test_dashboard.py",
-    "DASHBOARD.md", "README.md", "POLICY.md", "AVATARS.md",
+    "DASHBOARD.md", "README.md", "POLICY.md", "AVATARS.md", "UI.md",
     "tests/test_dashboard_state.py",
     "tests/test_dashboard_gpu.py", "tests/test_dashboard_server.py", "tests/test_dashboard_bundle.py",
     "researchops/dashboard_tasks.py", "tests/test_dashboard_tasks.py",
-    "researchops/worker_store.py", "researchops/worker_web.py", "tests/test_worker_store.py",
+    "researchops/worker_store.py", "researchops/worker_web.py", "researchops/mission_status.py", "researchops/mission_web.py", "tests/test_worker_store.py", "tests/test_mission_status.py",
     "tests/test_worker_http.py", "tests/test_dashboard_avatar_media.py",
 )
 AVATARS = {
