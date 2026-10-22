@@ -339,11 +339,12 @@ var worker=document.getElementById('workerForm'), workerVisible=worker&&!worker.
 var selectors={mission:'.cy-mission',gpu:'.cy-gpu',codex:'.cy-code',claude:'.cy-claude',connection:'[data-connection]',refresh:'[data-refresh]',runtime:'[data-runtime]',gpuState:'[data-gpu-state]',gpuUtil:'[data-gpu-util]',codexState:'[data-code-state]',claudeState:'[data-claude-state]',observed:'[data-observed]',gpuObserved:'[data-gpu-observed]',composerPrompt:workerVisible?'#workerPrompt':'#composerPrompt',composerSubmit:workerVisible?'#workerSubmit':'#composerSubmit'};
 var result={viewport:{width:innerWidth,height:innerHeight,dpr:devicePixelRatio},document:{width:document.documentElement.scrollWidth,height:document.documentElement.scrollHeight,clientWidth:document.documentElement.clientWidth,clientHeight:document.documentElement.clientHeight},elements:{},avatars:{},ukTime:{browserTimeZone:Intl.DateTimeFormat().resolvedOptions().timeZone,expectedDisplayZone:'Europe/London'}};
 function rect(element){var r=element.getBoundingClientRect();return {x:r.x,y:r.y,width:r.width,height:r.height,right:r.right,bottom:r.bottom};}
+function unclipped(element,r){for(var a=element.parentElement;a;a=a.parentElement){var s=getComputedStyle(a),b=a.getBoundingClientRect(),x=b.left+a.clientLeft,y=b.top+a.clientTop;if(s.overflowX!=='visible'&&(r.x<x-1||r.right>x+a.clientWidth+1))return false;if(s.overflowY!=='visible'&&(r.y<y-1||r.bottom>y+a.clientHeight+1))return false;}return true;}
 Object.keys(selectors).forEach(function(key){
     var element=document.querySelector(selectors[key]);
     if(!element){result.elements[key]={found:false,visible:false};return;}
     var r=rect(element),s=getComputedStyle(element);
-    result.elements[key]={found:true,visible:r.width>0&&r.height>0&&s.visibility!=='hidden'&&s.display!=='none',insideViewport:r.x>=-1&&r.y>=-1&&r.right<=innerWidth+1&&r.bottom<=innerHeight+1,rect:r};
+    result.elements[key]={found:true,visible:r.width>0&&r.height>0&&s.visibility!=='hidden'&&s.display!=='none'&&unclipped(element,r),insideViewport:r.x>=-1&&r.y>=-1&&r.right<=innerWidth+1&&r.bottom<=innerHeight+1,rect:r};
     if(key==='observed'||key==='gpuObserved')result.ukTime[key]=element.textContent.slice(0,200);
 });
 ['david','lucy'].forEach(function(key){

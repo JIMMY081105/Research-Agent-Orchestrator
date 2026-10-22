@@ -20,7 +20,14 @@ CSS = r'''
 #scene-cyber-deck .cy-chat-message>p{margin:0;white-space:pre-wrap}
 #scene-cyber-deck .cy-chat-thread{display:flex;flex-direction:column;gap:9px}
 #scene-cyber-deck .cy-channel-row{margin:3px 0;padding-top:4px;flex:none}
-#scene-cyber-deck .cy-mission-input>.cy-composer{flex:0 0 auto;max-height:70%;min-height:0;overflow:auto;scrollbar-gutter:auto;padding:0;gap:3px}
+#scene-cyber-deck .cy-mission-input>.cy-composer{flex:0 1 auto;max-height:calc(100% - 28px);min-height:66px;overflow:visible;scrollbar-gutter:auto;padding:0;gap:3px}
+#scene-cyber-deck .cy-mission-input>.cy-composer>.cy-compose-controls{display:flex;flex-direction:column;flex:1 1 auto;min-height:0;overflow:auto;gap:3px}
+#scene-cyber-deck .cy-mission-input>.cy-composer>.cy-chat-entry{flex:0 0 auto}
+.desktop-dashboard #scene-cyber-deck .cy-mission-input{overflow:hidden;padding:0}
+.desktop-dashboard #scene-cyber-deck .cy-mission-input>.cy-chat-feed{min-height:0}
+.desktop-dashboard #scene-cyber-deck .cy-mission-input>.cy-composer{overflow:visible;gap:3px}
+.desktop-dashboard #scene-cyber-deck .cy-composer .cy-chat-entry textarea{height:48px;min-height:40px;max-height:64px}
+.desktop-dashboard #scene-cyber-deck #workerPrompt,.desktop-dashboard #scene-cyber-deck #composerPrompt{height:44px;min-height:40px;max-height:64px}
 #scene-cyber-deck .cy-composer .cy-composer-policy{font-size:10px}
 #scene-cyber-deck .cy-chat-entry{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;padding:5px;border:1px solid #6ceee64d;border-radius:9px;background:var(--cy-deep);align-items:end}
 #scene-cyber-deck .cy-chat-entry textarea{border:0;background:transparent;height:54px;min-height:44px;max-height:90px;resize:vertical;padding:5px!important;box-shadow:none}
@@ -59,7 +66,7 @@ CSS = r'''
 #scene-cyber-deck [data-progress="executing"] .cy-agent-state::before,#scene-cyber-deck [data-progress="reviewing"] .cy-agent-state::before{content:'';display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:9px;vertical-align:middle;background:var(--cy-panel-accent);animation:cy-public-thinking 2.2s ease-in-out infinite}
 @keyframes cy-public-thinking{0%,100%{opacity:.22;box-shadow:0 0 0 0 transparent}52%{opacity:1;box-shadow:0 0 14px 3px var(--cy-panel-accent)}}
 #scene-cyber-deck.cy-paused .cy-agent-state::before,#scene-cyber-deck.cy-motion-off .cy-agent-state::before,#scene-cyber-deck.cy-progress-hidden .cy-agent-state::before{animation:none;box-shadow:none}
-@media(min-width:1000px) and (min-height:540px){.desktop-dashboard #scene-cyber-deck{--cy-avatar:clamp(112px,16vh,150px);--cy-avatar-half:calc(var(--cy-avatar)/2)}.desktop-dashboard #scene-cyber-deck .cy-grid{grid-template-rows:minmax(0,1.12fr) minmax(0,1fr)}.desktop-dashboard #scene-cyber-deck .cy-mission-input>.cy-composer textarea{height:54px;min-height:44px}.desktop-dashboard #scene-cyber-deck .cy-mission-input>.cy-chat-feed{min-height:42px}.desktop-dashboard #scene-cyber-deck .cy-stage-history{flex:1 1 0!important}}
+@media(min-width:1000px) and (min-height:540px){.desktop-dashboard #scene-cyber-deck{--cy-avatar:clamp(112px,16vh,150px);--cy-avatar-half:calc(var(--cy-avatar)/2)}.desktop-dashboard #scene-cyber-deck .cy-grid{grid-template-rows:minmax(0,1.12fr) minmax(0,1fr)}.desktop-dashboard #scene-cyber-deck .cy-mission-input>.cy-composer textarea{height:54px;min-height:44px}.desktop-dashboard #scene-cyber-deck .cy-mission-input>.cy-chat-feed{min-height:0}.desktop-dashboard #scene-cyber-deck .cy-stage-history{flex:1 1 0!important}}
 @media(max-width:999px){#scene-cyber-deck{--cy-avatar:112px}#scene-cyber-deck .cy-chat-feed{min-height:160px;max-height:360px}#scene-cyber-deck .cy-stage-log{max-height:180px}#scene-cyber-deck .cy-stage-history{min-height:100px}}
 @media(prefers-reduced-motion:reduce){#scene-cyber-deck .cy-agent-state::before{animation:none!important;box-shadow:none!important}}
 '''
@@ -93,6 +100,8 @@ JS = r'''
    const actions=form.querySelector(':scope>.cy-composer-actions'), entry=make('div','cy-chat-entry');entry.append(input,actions);
    if(promptId==='workerPrompt'){settings.append(entry.querySelector('#workerCancel'),entry.querySelector('#workerState'));}
    form.append(settings,materials,entry);
+   const controls=make('div','cy-compose-controls');
+   Array.from(form.children).filter(e=>e!==entry).forEach(e=>controls.append(e));form.prepend(controls);
  }
  dock(q('#composerForm'),'composerPrompt');dock(q('#workerForm'),'workerPrompt');
  const panels={};

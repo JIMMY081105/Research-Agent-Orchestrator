@@ -5,6 +5,7 @@ import argparse
 import base64
 import datetime as dt
 import json
+import re
 from pathlib import Path
 import subprocess
 import socket
@@ -225,6 +226,22 @@ def main():
             check('layout_' + str(width), geometry['panels'] and geometry['noScroll'] and geometry['avatars'] and 0 <= geometry['bottom'] < 45 and geometry['refsAbove'])
             browser.capture(directory / (str(width) + '.png'))
         browser.size(1536, 864)
+        probe_source=(ROOT/'native/SceneControl.cs').read_text(encoding='utf-8-sig')
+        probe=re.search(r'private const string Probe = @"(.*?)";',probe_source,re.S).group(1).replace('""','"')
+        browser.evaluate("(()=>{const a=document.querySelector('[data-observer-alert]');a.textContent='DEMO: preserved research stop alert';a.style.setProperty('display','block','important');a.style.height='24px';a.hidden=false})()")
+        for width,height in ((1092,565),(1230,642),(1536,750)):
+            browser.size(width,height)
+            for channel in ('worker','analysis'):
+                browser.evaluate("document.querySelector('#"+channel+"Tab').click()")
+                clipped_probe=browser.evaluate(probe)
+                if not clipped_probe['checks']['criticalElementsVisible']:
+                    report['clipping_diagnostic']=clipped_probe
+                check('unclipped_'+channel+'_'+str(width),clipped_probe['checks']['criticalElementsVisible'])
+        browser.size(1536,864)
+        browser.evaluate("document.querySelector('#workerTab').click();document.querySelector('.cy-mission-input').style.height='40px';document.querySelector('.cy-mission-input').style.flex='none'")
+        check('native_visibility_probe_rejects_ancestor_clipping',not browser.evaluate(probe)['checks']['criticalElementsVisible'])
+        browser.evaluate("document.querySelector('.cy-mission-input').style.removeProperty('height');document.querySelector('.cy-mission-input').style.removeProperty('flex')")
+        check('native_visibility_probe_recovers_after_restore',browser.evaluate(probe)['checks']['criticalElementsVisible'])
         browser.evaluate("document.querySelector('#workerPrompt').value='draft survives refresh';document.querySelector('#workerPrompt').dispatchEvent(new Event('input'));document.querySelector('#workerMode').value='full';document.querySelector('#workerMode').dispatchEvent(new Event('change'))")
         check('draft_mode_does_not_relabel_running_turn', browser.evaluate("document.querySelector('.cy-code .cy-agent-specs').textContent.includes('Approval needed')"))
         fixture.change('REVIEWING');refresh()
