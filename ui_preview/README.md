@@ -5,8 +5,11 @@
 [Progress layout, synthetic data](preview-progress.png)
 
 Flask 3.1 / Jinja2 templates / locally pinned HTMX 2.0.11 / small native JavaScript.
-Cyberpunk styling on a chat layout; Prompt / Progress switch and GPU chip only in
-Prompt. Default controls: GPT-6.1 Sol, Extra high, Standard, Approval needed.
+Cyberpunk styling on a chat layout; the sidebar owns Prompt / Progress navigation
+and New chat, with a plain page title above. The compact GPU chip appears only in
+Prompt and shows memory used / total plus percentage. Default controls: GPT-6.1
+Sol, Extra high, Standard, Approval needed. Settings use upward opening popovers
+with short opacity/scale transitions, keyboard navigation and Escape dismissal.
 
 **All model, GPU, execution and review data here are illustrative.** Sending text
 renders a template response. No CLI, SSH, research file, production queue, approval,

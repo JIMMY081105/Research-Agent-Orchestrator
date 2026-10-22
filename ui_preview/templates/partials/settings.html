@@ -1,5 +1,15 @@
-<label class="setting permission"><span class="sr-only">权限</span><select name="permission" data-draft aria-label="权限模式">{% for x in options.permissions %}<option>{{ x }}</option>{% endfor %}</select></label>
-<label class="setting"><span class="sr-only">模型</span><select name="model" data-draft aria-label="模型">{% for x in options.models %}<option>{{ x }}</option>{% endfor %}</select></label>
-<label class="setting"><span class="sr-only">推理强度</span><select name="effort" data-draft aria-label="推理强度">{% for x in options.efforts %}<option{% if x=='Extra high' %} selected{% endif %}>{{ x }}</option>{% endfor %}</select></label>
-<label class="setting"><span class="sr-only">速度</span><select name="speed" data-draft aria-label="速度模式">{% for x in options.speeds %}<option>{{ x }}</option>{% endfor %}</select></label>
-<label class="setting mode"><span class="sr-only">工作模式</span><select name="mode" data-draft aria-label="Task Plan Goal">{% for x in options.modes %}<option>{{ x }}</option>{% endfor %}</select></label>
+{% macro picker(field,label,values,current,modifier='') %}
+<div class="setting {{ modifier }}" data-setting="{{ field }}">
+  <input type="hidden" name="{{ field }}" value="{{ current }}" data-draft>
+  <button type="button" class="setting-trigger" popovertarget="menu-{{ field }}" aria-controls="menu-{{ field }}" aria-haspopup="listbox" aria-expanded="false" data-setting-label="{{ label }}" aria-label="{{ label }}：{{ current }}"><span class="setting-value">{{ current }}</span><svg class="setting-chevron" viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4"/></svg></button>
+  <div class="setting-menu" id="menu-{{ field }}" data-field="{{ field }}" popover="auto" role="listbox" aria-label="{{ label }}">
+    <div class="menu-heading">{{ label }}</div>
+    {% for value in values %}<button type="button" class="setting-option" data-option="{{ value }}" role="option" aria-selected="{{ 'true' if value==current else 'false' }}"><span class="option-copy"><span>{{ value }}</span>{% if field=='permission' %}<small>{{ '由你确认需要批准的操作' if value=='Approval needed' else '自动执行工具与文件操作' }}</small>{% endif %}</span><svg class="option-check" viewBox="0 0 16 16" aria-hidden="true"><path d="m3 8 3 3 7-7"/></svg></button>{% endfor %}
+  </div>
+</div>
+{% endmacro %}
+{{ picker('permission','执行权限',options.permissions,'Approval needed','permission') }}
+{{ picker('model','模型',options.models,'GPT-6.1 Sol') }}
+{{ picker('effort','推理强度',options.efforts,'Extra high') }}
+{{ picker('speed','速度',options.speeds,'Standard') }}
+{{ picker('mode','工作模式',options.modes,'Task','mode') }}

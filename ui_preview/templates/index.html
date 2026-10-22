@@ -19,10 +19,8 @@
 </aside>
 <div class="app">
   <header class="topbar">
-    <details class="page-switch" id="page-switch"><summary><span id="page-name">{{ page|capitalize }}</span><span class="chevron">⌄</span></summary>
-      <nav class="page-menu" aria-label="切换页面"><a href="/?page=prompt" hx-get="/view/prompt" hx-target="#workspace">Prompt<small>输入问题，选择工作方式</small></a><a href="/?page=progress" hx-get="/view/progress" hx-target="#workspace">Progress<small>执行阶段与审核的视觉预览</small></a></nav>
-    </details>
-    <div class="gpu-chip" aria-label="示例 GPU 读数，仅用于排版"><span class="gpu-icon">▦</span><span>SQZ GPU</span><b>42<small>%</small></b><span class="gpu-detail">12.8<small> GiB</small></span><span class="gpu-detail">51<small>°C</small></span><em>DEMO</em></div>
+    <h1 class="page-title" id="page-name">{{ page|capitalize }}</h1>
+    <div class="gpu-chip" aria-label="示例 GPU：利用率42%，显存12.8 / 45.0 GiB，约28%"><span class="gpu-icon">▦</span><span>SQZ GPU</span><b>42<small>%</small></b><span class="gpu-memory" title="显存：已使用 / 总量"><span class="gpu-detail">12.8 / 45.0<small> GiB</small></span><span class="memory-percent">28%</span></span><span class="gpu-detail">51<small>°C</small></span><em>DEMO</em></div>
     <span class="preview-badge">UI PREVIEW</span>
   </header>
   <main id="workspace" class="workspace" aria-live="polite">{% include 'partials/'+page+'.html' %}</main>
