@@ -265,3 +265,13 @@ Mission includes a bounded prompt composer for supplied-text analysis: choose
 Codex or Claude to write, with the other reviewing. Task submission, waiting,
 structured results and acceptance are distinct states. This uses the existing
 allowlisted queue and does not grant research writes, asset browsing or GPU use.
+## Focused reviews and token evidence
+
+Source audits can prepare complete differences plus explicit UI cross-language
+context against an approved baseline. Sensitive or unknown changes expand to
+full source; oversized or incomplete context defers before a model call.
+Provider-reported input, output and cache counts are retained as numeric evidence;
+missing historical values stay unknown. Three small original review skills are
+available for both Codex and Claude. See [REVIEW.md](REVIEW.md) for preparation,
+installation, usage reporting and acceptance limits. This development change does
+not replace a running fixed snapshot or reset any review history.

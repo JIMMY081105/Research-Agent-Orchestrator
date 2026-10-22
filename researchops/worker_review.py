@@ -6,6 +6,7 @@ import uuid
 
 from .worker_store import WorkerError, canonical, sha, save, utc, clean
 from .dashboard_bundle import safe_path
+from . import adapters
 
 
 def active(runtime):
@@ -75,7 +76,7 @@ def review_turn(runtime, store, turn, source_sha):
     pause = safe_path(runtime / "worker/review-pause.json")
     if pause.exists():
         raise WorkerError("CLAUDE_REVIEW_PAUSED_NO_AUTOMATIC_RETRY")
-    _, _, adapters, policy, machine = active(runtime)
+    _, _, _, policy, machine = active(runtime)
     snapshot = workspace_snapshot(Path(turn["workspace"]))
     binding = sha(canonical({"source": source_sha, "request": turn["input_hash"],
                             "workspace": snapshot["sha256"], "response": sha(turn["response"].encode("utf-8"))}))

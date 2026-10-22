@@ -20,6 +20,11 @@ SOURCE_FILES = dashboard_bundle.FILES + (
     "worker.py", "researchops/worker_rpc.py", "researchops/worker_service.py", "researchops/worker_review.py",
     "researchops/winproc.py", "tools/worker.ps1", "config/worker-AGENTS.md", "WORKER.md",
     "tests/test_worker_rpc.py", "tests/test_worker_service.py",
+    "researchops/review_context.py", "researchops/token_usage.py", "researchops/adapters.py",
+    "config/review-context.json", "skills/diff-review.md", "skills/risk-aware-review.md", "skills/token-budget.md",
+    "tools/prepare_review.py", "tools/install_review_skills.py", "tools/token_usage.py", "REVIEW.md",
+    "tests/test_review_context.py", "tests/test_token_usage.py", "tests/test_review_tools.py",
+    "tests/test_adapter_diagnostics.py",
 )
 APP_FILES = (
     "SceneControl.exe", "Microsoft.Web.WebView2.Core.dll", "Microsoft.Web.WebView2.WinForms.dll",

@@ -5,6 +5,7 @@ from pathlib import Path
 import re
 import uuid
 from . import winproc
+from . import token_usage
 
 BILLING_VARS = ("OPENAI_API_KEY", "ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN",
                 "OPENAI_BASE_URL", "ANTHROPIC_BASE_URL", "CLAUDE_CODE_USE_BEDROCK",
@@ -40,6 +41,9 @@ def safe_evidence(meta):
     status = (meta or {}).get("http_status")
     if type(status) is int and status in HTTP_CODES:
         out["http_status"] = status
+    usage = token_usage.safe_usage((meta or {}).get('token_usage'))
+    if usage is not None:
+        out['token_usage'] = usage
     return out
 
 
@@ -310,7 +314,8 @@ def invoke(engine, machine, policy, prompt, schema_path, cwd, on_start, session=
         command(engine, machine, session, schema_path, effort), prompt, cwd, env,
         policy["timeout_seconds"], on_start, policy["memory_mb"])
     meta = {"engine": engine, "requested_session_id": session, "exit_code": rc,
-            "seconds": round(seconds, 3), "tools_disabled": True}
+            "seconds": round(seconds, 3), "tools_disabled": True,
+            "token_usage": token_usage.from_output(engine, out)}
     if rc == 1460:
         raise CallError("TIMEOUT", meta)
     if rc == winproc.OWNED_OUTPUT_LIMIT_EXIT:

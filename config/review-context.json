@@ -1,0 +1,8 @@
+{
+  "schema": 1,
+  "max_packet_bytes": 262144,
+  "max_full_packet_bytes": 2097152,
+  "ui_context": ["researchops/dashboard_web.py", "researchops/mission_web.py", "native/SceneControl.cs", "tools/verify_mission_ui.py", "tools/verify_desktop.py"],
+  "ui_paths": ["researchops/mission_web.py", "researchops/dashboard_web.py", "native/SceneControl.cs", "tools/verify_mission_ui.py", "tools/verify_desktop.py"],
+  "skills": ["skills/diff-review.md", "skills/risk-aware-review.md", "skills/token-budget.md"]
+}

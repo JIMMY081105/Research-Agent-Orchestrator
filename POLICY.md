@@ -201,3 +201,17 @@ governance or approve a production goal. UI writes require same-origin JSON and
 a per-service CSRF token, bounded input, canonical UUID and persistent idempotent
 admission. Status refreshes never dispatch work. Submission cannot resume a
 paused engine, alter budgets or execute commands supplied in model output.
+## Review context and usage evidence
+
+The local preparer may use an independently approved baseline plus a complete
+content-bound delta and explicit required context for defined UI paths. The
+current revision still needs a new decision; the prior PASS is never carried
+forward as current approval. Initial, sensitive and unknown changes require
+full context. Missing context returns NEEDS_CONTEXT; context limits defer
+without truncation or a model charge. New review grants are not inferred.
+
+Numeric provider usage is retained on successful and failed native responses
+when present. Missing is UNKNOWN, never fabricated as zero. Cumulative native
+thread samples and per-model counts are not added to per-call aggregates.
+No raw streams, hidden reasoning or credentials are stored for usage reporting.
+Skills are review criteria, not permission, budget or deployment bypasses.

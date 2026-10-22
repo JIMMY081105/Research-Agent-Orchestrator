@@ -14,6 +14,7 @@ from . import winproc
 from .worker_rpc import Rpc
 from .worker_store import Store, WorkerError, OWNER, BUSY, policy, save, sha, canonical, clean, utc
 from .worker_review import charge, review_turn
+from .token_usage import app_server_usage
 
 RULES = """You are the Codex executor in the user's local Scene Control application. Follow the user's task and loaded AGENTS.md/skills.
 Your current owned workspace is the writable task directory. Code writes are limited to that workspace and explicit task scope in the authorized repositories: E:\\Github\\Building-Generation-Validation (existing controller) and E:\\Github\\Research-Agent-Orchestrator (newly authorized software development repository). The new software repository is separate from server building-generation code and scientific gate results. The public Buildings-Generation repository and existing research jobs remain read-only unless the user separately authorizes a concrete change.
@@ -145,6 +146,7 @@ class Service:
             safe_path(skill["path"])
             items.append({"type": "skill", "name": skill["name"], "path": skill["path"]})
         call_id = charge(self.runtime, "codex", "worker-execute:" + turn["id"], "execute")
+        turn['call_id'] = call_id
         self.store.update(turn["id"], call_id=call_id)
         response = self.rpc.call("turn/start", {"threadId": turn["thread"], "input": items, "cwd": str(workspace),
                 **requested, 'model': turn['model'], "effort": turn["effort"], "summary": "none"})
@@ -201,7 +203,13 @@ class Service:
             else:
                 self.rpc.send({"id": value["id"], "error": {"code": -32601, "message": "Unsupported approval type; no permission granted"}})
             return
-        if method == "item/agentMessage/delta":
+        if method == 'thread/tokenUsage/updated':
+            if params.get('threadId') != turn['thread'] or params.get('turnId') != turn['native_turn']:
+                return
+            save(safe_path(self.runtime / 'worker/turns' / turn['id'] / 'token-usage.json'),
+                 dict(call_id=turn['call_id'], session_id=turn['session'], thread_id=turn['thread'],
+                      turn_id=turn['native_turn'], token_usage=app_server_usage(params), observed_at=utc()))
+        elif method == "item/agentMessage/delta":
             key = params.get("itemId", "message")
             self.message_text[key] = (self.message_text.get(key, "") + params.get("delta", ""))[:64000]
             self.store.update(turn["id"], response=clean("\n".join(self.message_text.values()), 64000))
