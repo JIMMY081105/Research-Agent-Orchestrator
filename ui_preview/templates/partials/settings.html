@@ -9,7 +9,7 @@
 </div>
 {% endmacro %}
 {{ picker('permission','执行权限',options.permissions,'Approval needed','permission') }}
-{{ picker('model','模型',options.models,'GPT-6.1 Sol') }}
+{{ picker('model','模型',options.models,default_model) }}
 {{ picker('effort','推理强度',options.efforts,'Extra high') }}
 {{ picker('speed','速度',options.speeds,'Standard') }}
 {{ picker('mode','工作模式',options.modes,'Task','mode') }}

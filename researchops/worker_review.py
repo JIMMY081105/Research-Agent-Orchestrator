@@ -52,6 +52,9 @@ def workspace_snapshot(workspace):
                 if path.name not in excluded:
                     stack.append(path)
                 continue
+            if (path.name.lower().startswith(('.env', 'auth.json', 'credentials', 'id_rsa', 'id_ed25519'))
+                    or path.suffix.lower() in ('.key', '.pem', '.pfx', '.p12', '.ppk', '.kdbx')):
+                raise WorkerError('SENSITIVE_WORKSPACE_PATH')
             count += 1
             if count > 256 or path.stat().st_size > 16 * 1024 * 1024:
                 raise WorkerError("WORKSPACE_AUDIT_LIMIT_REACHED")
@@ -78,8 +81,11 @@ def review_turn(runtime, store, turn, source_sha):
         raise WorkerError("CLAUDE_REVIEW_PAUSED_NO_AUTOMATIC_RETRY")
     _, _, _, policy, machine = active(runtime)
     snapshot = workspace_snapshot(Path(turn["workspace"]))
-    binding = sha(canonical({"source": source_sha, "request": turn["input_hash"],
-                            "workspace": snapshot["sha256"], "response": sha(turn["response"].encode("utf-8"))}))
+    from .worker_context import packet
+    previous_path = store.runtime / 'turns' / turn['id'] / 'review-context.json'
+    previous = json.loads(previous_path.read_text(encoding='utf-8')) if previous_path.exists() else None
+    package, packet_bytes = packet(turn, source_sha, snapshot, previous)
+    binding = package['binding_sha256']
     ident = str(uuid.uuid4()); session = str(uuid.uuid4())
     folder = safe_path(runtime / "worker/turns" / turn["id"] / "reviews" / ident)
     folder.mkdir(parents=True, exist_ok=False); (folder / "work").mkdir()
@@ -88,13 +94,12 @@ def review_turn(runtime, store, turn, source_sha):
                   "binding_sha256": {"const": binding}, "verdict": {"enum": ["PASS", "REWORK"]},
                   "issues": {"type": "array", "maxItems": 20, "items": {"type": "string", "maxLength": 1500}}}}
     save(folder / "schema.json", schema)
-    package = {"binding_sha256": binding, "task": turn["id"], "permission_mode": turn["mode"],
-               "request": turn["prompt"], "final_response": turn["response"], "workspace": snapshot}
     save(folder / "package.json", package)
     call_id = charge(runtime, "claude", "independent-review:worker-turn:" + turn["id"] + ":" + ident, "review")
     record = {"id": ident, "session_id": session, "call_id": call_id, "binding_sha256": binding,
               "created_at": utc(), "status": "CALL_RESERVED", "scope": snapshot["scope"],
-              "settings": {"model": None, "effort": "high", "permission_mode": "dontAsk", "tools_disabled": True}}
+              "packet_bytes": packet_bytes,
+              "settings": {"model": None, "effort": "medium", "permission_mode": "dontAsk", "tools_disabled": True}}
     save(folder / "result.json", record)
     def started(pid, birth):
         save(folder / "process.json", {"owner": "BGV.Windows.CodexWorker.v1", "pid": pid, "birth": birth,
@@ -104,8 +109,8 @@ def review_turn(runtime, store, turn, source_sha):
               "Check task completion supported by these files, code defects and contradictions. Do not certify remote/GPU/physics results or external files not supplied. "
               "PASS means this bounded workspace review only, not scientific READY or permission to publish. Return exact schema JSON.\n" + canonical(package).decode("utf-8"))
     try:
-        value, evidence = adapters.invoke("claude", machine, {**policy, "timeout_seconds": 180}, prompt,
-                                          folder / "schema.json", folder / "work", started, session=session, effort="high")
+        value, evidence = adapters.invoke("claude", machine, {**policy, "timeout_seconds": 180, 'minimal_review_system': True}, prompt,
+                                          folder / "schema.json", folder / "work", started, session=session, effort="medium")
         if (type(value) is not dict or value.get("binding_sha256") != binding
                 or value.get("verdict") not in ("PASS", "REWORK") or type(value.get("issues")) is not list
                 or evidence.get("tools_disabled") is not True or evidence.get("exit_code") != 0
@@ -113,6 +118,7 @@ def review_turn(runtime, store, turn, source_sha):
             raise WorkerError("WORKER_REVIEW_BINDING_INVALID")
         record.update(status=value["verdict"], review=value, evidence=adapters.safe_evidence(evidence), completed_at=utc())
         save(folder / "result.json", record)
+        save(previous_path, {**package, 'review': value})
         store.event(turn["session"], turn["id"], "REVIEW", json.dumps(value, ensure_ascii=False))
         return value
     except adapters.CallError as error:

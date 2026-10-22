@@ -1,3 +1,6 @@
+{% if connected and current_session %}
+<section data-view="progress" class="progress-page" hx-get="/execution/progress/{{ current_session }}" hx-trigger="load" hx-swap="outerHTML">读取真实任务进度…</section>
+{% else %}
 {% set steps=['接收任务','执行','独立审核','结果'] %}
 {% set phase=2 if scenario=='review' else 3 if scenario=='complete' else 1 %}
 <section class="progress-page" data-view="progress">
@@ -21,3 +24,4 @@
   </div>
   <footer class="progress-footnote">以上全部是排版示例。没有连接真实进程、审核、服务器或 GPU。</footer>
 </section>
+{% endif %}

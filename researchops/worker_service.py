@@ -13,7 +13,7 @@ from .dashboard_bundle import safe_path, read_small_json
 from . import winproc
 from .worker_rpc import Rpc
 from .worker_store import Store, WorkerError, OWNER, BUSY, policy, save, sha, canonical, clean, utc
-from .worker_review import charge, review_turn
+from .worker_review import charge, review_turn, workspace_snapshot
 from .token_usage import app_server_usage
 
 RULES = """You are the Codex executor in the user's local Scene Control application. Follow the user's task and loaded AGENTS.md/skills.
@@ -68,6 +68,7 @@ class Service:
         model_rows = self.rpc.call("model/list", {}).get("data", [])
         self.models = [v["id"] for v in model_rows if type(v.get("id")) is str]
         preferred_model = next((v["id"] for v in model_rows if v.get("isDefault") is True), None)
+        if 'gpt-6.1-sol' in self.models:preferred_model='gpt-6.1-sol'
         if not preferred_model or preferred_model not in self.models:
             raise WorkerError("NATIVE_AVAILABLE_DEFAULT_MODEL_MISSING")
         rows = self.rpc.call("skills/list", {"cwds": [str(self.store.runtime)], "forceReload": False}).get("data", [])
@@ -117,6 +118,8 @@ class Service:
             agents.write_bytes(template.read_bytes())
         self.store.update(turn["id"], state="STARTING")
         requested = policy(turn["mode"], workspace)
+        if turn.get('kind')=='analysis':
+            requested={'approvalPolicy':'untrusted','sandboxPolicy':{'type':'readOnly'}}
         if turn["thread"]:
             response = self.rpc.call("thread/resume", {"threadId": turn["thread"], "excludeTurns": True,
                                                       "cwd": str(workspace), "modelProvider": "openai",
@@ -125,7 +128,7 @@ class Service:
                 raise WorkerError("WORKER_RESUME_SESSION_MISMATCH")
         else:
             response = self.rpc.call("thread/start", {"cwd": str(workspace), "modelProvider": "openai",
-                "approvalPolicy": requested["approvalPolicy"], "sandbox": "danger-full-access" if turn["mode"] == "full" else "workspace-write",
+                "approvalPolicy": requested["approvalPolicy"], "sandbox": 'read-only' if turn.get('kind')=='analysis' else "danger-full-access" if turn["mode"] == "full" else "workspace-write",
                 "developerInstructions": RULES, "model": turn["model"], "ephemeral": False})
             expected_type = requested["sandboxPolicy"]["type"]
             if response.get("sandbox", {}).get("type") != expected_type or response.get("approvalPolicy") != requested["approvalPolicy"]:
@@ -138,7 +141,16 @@ class Service:
             raise WorkerError('NATIVE_OWNED_SESSION_MODEL_MISMATCH')
         self.store.event(turn["session"], turn["id"], "INSTRUCTIONS", json.dumps({"sources": response.get("instructionSources", []), "mode": turn["mode"], "workspace": str(workspace)}, ensure_ascii=False))
         selected = {s["id"]: s for s in self.skills}
-        items = [{"type": "text", "text": turn["prompt"]}]
+        prompt = turn['prompt']
+        if turn.get('reworks', 0):
+            repair = read_small_json(self.store.runtime / 'turns' / turn['id'] / ('repair-'+str(turn['reworks'])+'.json'))
+            if (repair.get('input_hash') != turn['input_hash'] or repair.get('workspace_sha256') != workspace_snapshot(workspace)['sha256']):
+                raise WorkerError('REPAIR_INPUT_CHANGED_REQUIRES_RECONCILIATION')
+            prompt += '\nIndependent Claude review requests the following corrections. Preserve the original task scope and permissions; do not invoke AI.\n' + json.dumps(repair['issues'], ensure_ascii=False)
+        attempt = self.store.runtime / 'turns' / turn['id'] / 'attempts' / str(turn.get('reworks', 0))
+        attempt.mkdir(parents=True, exist_ok=False)
+        save(attempt / 'request.json', {'prompt': prompt, 'input_hash': turn['input_hash'], 'created_at': utc()})
+        items = [{"type": "text", "text": prompt}]
         for skill_id in json.loads(turn["skills"]):
             if skill_id not in selected:
                 raise WorkerError("WORKER_SKILL_DISAPPEARED")
@@ -247,12 +259,22 @@ class Service:
                     raise WorkerError('NATIVE_MODEL_PAUSED_' + reason)
                 return
             turn["response"] = clean("\n".join(self.message_text.values()), 64000)
+            attempt = self.store.runtime / 'turns' / turn['id'] / 'attempts' / str(turn.get('reworks', 0))
+            save(attempt / 'result.json', {'response': turn['response'], 'native_turn': turn['native_turn'], 'completed_at': utc()})
             self.store.update(turn["id"], state="REVIEWING", response=turn["response"])
             self.heartbeat()
             try:
                 result = self.reviewer(self.runtime, self.store, turn, self.source_sha)
-                self.store.update(turn["id"], state="REVIEW_PASS" if result["verdict"] == "PASS" else "NEEDS_REWORK",
-                                  reason=None if result["verdict"] == "PASS" else "CLAUDE_REVIEW_REWORK")
+                if result['verdict'] == 'REWORK' and result.get('issues') and turn.get('reworks', 0) < 2:
+                    number = turn.get('reworks', 0)+1
+                    save(self.store.runtime / 'turns' / turn['id'] / ('repair-'+str(number)+'.json'),
+                         {'input_hash': turn['input_hash'], 'workspace_sha256': workspace_snapshot(Path(turn['workspace']))['sha256'],
+                          'issues': result['issues'], 'parent_binding': result.get('binding_sha256'), 'created_at': utc()})
+                    self.store.update(turn['id'], state='QUEUED', reworks=number, reason='CLAUDE_REWORK_AUTO_QUEUED')
+                    self.store.event(turn['session'], turn['id'], 'STATUS', 'Claude 退回；已自动安排第 '+str(number)+' 次修复')
+                else:
+                    self.store.update(turn["id"], state="REVIEW_PASS" if result["verdict"] == "PASS" else "NEEDS_REWORK",
+                                      reason=None if result["verdict"] == "PASS" else "REWORK_LIMIT_OR_MISSING_FINDINGS")
             except (WorkerError, OSError, ValueError) as error:
                 self.store.update(turn["id"], state="PAUSED_REVIEW", reason=str(error) if isinstance(error, WorkerError) else "REVIEW_UNVERIFIED")
             finally:

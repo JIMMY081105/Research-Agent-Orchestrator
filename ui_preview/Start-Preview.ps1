@@ -46,7 +46,7 @@ function Preview-Health {
     try { return Invoke-RestMethod 'http://127.0.0.1:8877/preview-health' -TimeoutSec 2 -UseBasicParsing } catch { return $null }
 }
 $health=Preview-Health
-if($health -and ($health.owner -cne 'ResearchAgentOrchestrator.UI.Preview' -or $health.ui_only -ne $true)){throw 'Port 8877 belongs to another application'}
+if($health -and ($health.owner -cne 'ResearchAgentOrchestrator.UI.Preview' -or $health.ui_only -notin @($true,$false))){throw 'Port 8877 belongs to another application'}
 if(-not $health){
     $listener=Get-NetTCPConnection -LocalPort 8877 -State Listen -ErrorAction SilentlyContinue
     if($listener){throw 'Preview port is already occupied; nothing stopped'}
@@ -54,7 +54,7 @@ if(-not $health){
     @{owner='ResearchAgentOrchestrator.UI.Preview';pid=$process.Id;started_utc=(Get-Date).ToUniversalTime().ToString('o')}|ConvertTo-Json|Set-Content -LiteralPath (Join-Path $state 'server.json') -Encoding utf8
     for($i=0;$i -lt 30;$i++){$health=Preview-Health;if($health){break};Start-Sleep -Milliseconds 150}
 }
-if(-not $health -or $health.owner -cne 'ResearchAgentOrchestrator.UI.Preview' -or $health.ui_only -ne $true){throw 'Preview service did not become ready'}
+if(-not $health -or $health.owner -cne 'ResearchAgentOrchestrator.UI.Preview' -or $health.ui_only -notin @($true,$false)){throw 'UI service did not become ready'}
 if($Desktop){Start-Process -FilePath $binary -ArgumentList '--desktop' -WorkingDirectory $native}
 else{Start-Process -FilePath $binary -WorkingDirectory $native}
 Write-Output ('UI-only native preview opened. '+$binary)

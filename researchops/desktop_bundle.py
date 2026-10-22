@@ -25,6 +25,16 @@ SOURCE_FILES = dashboard_bundle.FILES + (
     "tools/prepare_review.py", "tools/install_review_skills.py", "tools/token_usage.py", "REVIEW.md",
     "tests/test_review_context.py", "tests/test_token_usage.py", "tests/test_review_tools.py",
     "tests/test_adapter_diagnostics.py",
+    "researchops/worker_context.py", "tests/test_worker_loop.py",
+    "ui_preview/app.py", "ui_preview/execution.py", "ui_preview/static/execution.js",
+    "ui_preview/templates/partials/execution.html", "ui_preview/templates/partials/execution_error.html",
+    "ui_preview/templates/partials/live-progress.html", "ui_preview/test_execution.py",
+    "ui_preview/templates/index.html", "ui_preview/templates/partials/prompt.html",
+    "ui_preview/templates/partials/settings.html", "ui_preview/templates/partials/progress.html",
+    "ui_preview/templates/partials/message.html", "ui_preview/static/ui.js", "ui_preview/static/style.css",
+    "ui_preview/static/vendor/htmx.min.js", "ui_preview/static/vendor/provenance.json",
+    "ui_preview/static/vendor/HTMX-LICENSE.txt", "ui_preview/Start-Preview.ps1", "ui_preview/PreviewWindow.cs",
+    "tools/deploy_execution.py",
 )
 APP_FILES = (
     "SceneControl.exe", "Microsoft.Web.WebView2.Core.dll", "Microsoft.Web.WebView2.WinForms.dll",

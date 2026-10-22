@@ -1,0 +1,15 @@
+{% set turn=live.turns[0] if live.turns else none %}
+{% set review=live.review_summary %}
+<section class="progress-page" data-view="progress" hx-get="/execution/progress/{{ live.session }}" hx-trigger="every 3s" hx-swap="outerHTML">
+  <header class="progress-heading"><div><p class="eyebrow">MISSION CONTROL / LIVE</p><h1>{{ turn.state if turn else '无登记任务' }}</h1><p>{{ turn.reason or '执行与审核进度来自本机登记回执。' if turn else '' }}</p></div><span class="mission-id">{{ turn.id if turn else '' }}</span></header>
+  {% if turn %}<div class="pipeline"><div class="pipeline-step done">✓ 已登记</div><div class="pipeline-step {{ 'current' if turn.state=='RUNNING' else '' }}">02 Codex 执行</div><div class="pipeline-step {{ 'current' if turn.state=='REVIEWING' else '' }}">03 Claude 审核</div><div class="pipeline-step {{ 'done' if turn.state=='REVIEW_PASS' else '' }}">04 复验 · 修复 {{ turn.reworks }}/2</div></div>{% endif %}
+  <div class="agents">{% for agent,character in [('codex','david'),('claude','lucy')] %}
+    {% set working=turn and ((agent=='codex' and turn.state=='RUNNING') or (agent=='claude' and turn.state=='REVIEWING')) %}
+    <article class="agent {{ agent }} {{ 'working' if working else '' }}"><header class="agent-top"><span><i class="agent-dot"></i>{{ agent|capitalize }}</span><span class="state-pill">{{ 'RUNNING' if working else 'WAITING' }}</span></header>
+    <div class="agent-hero"><video src="{{ url_for('avatar',name=character+'.mp4') }}" autoplay muted loop playsinline preload="metadata"></video><div><p class="agent-role">{{ 'EXECUTOR' if agent=='codex' else 'REVIEWER' }}</p><h2>{{ turn.state if agent=='codex' and turn else review.status if review else '等待交接' }}</h2></div></div>
+    <dl class="specs"><div><dt>SESSION</dt><dd>{{ live.session if agent=='codex' else review.session_id if review else '尚未创建' }}</dd></div><div><dt>EFFORT</dt><dd>{{ turn.effort if agent=='codex' and turn else 'medium' }}</dd></div><div><dt>PERMISSIONS</dt><dd>{{ turn.mode if agent=='codex' and turn else 'TOOLS DISABLED' }}</dd></div></dl>
+    <div class="stage-heading">PUBLIC PROGRESS<span class="thinking-dot {{ 'lit' if working else '' }}"></span></div>
+    <ol class="stage-log">{% for event in live.events %}{% if (agent=='claude' and event.kind=='REVIEW') or (agent=='codex' and event.kind!='REVIEW') %}<li><p>{{ event.body }}</p></li>{% endif %}{% endfor %}</ol>
+    {% if agent=='claude' and review %}<footer>审核包 {{ review.packet_bytes }} B · token {{ review.token_usage or 'UNKNOWN' }}</footer>{% endif %}</article>
+  {% endfor %}<div class="handoff {{ 'transmitting' if turn and turn.state=='REVIEWING' else '' }}" aria-hidden="true"><span></span>→</div></div>
+</section>

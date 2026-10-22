@@ -6,16 +6,17 @@
 <link rel="stylesheet" href="{{ url_for('static',filename='style.css') }}">
 <script src="{{ url_for('static',filename='vendor/htmx.min.js') }}" defer></script>
 <script src="{{ url_for('static',filename='ui.js') }}" defer></script>
+<script src="{{ url_for('static',filename='execution.js') }}" defer></script>
 </head><body>
 <aside class="sidebar">
   <a href="/" class="brand"><span class="brand-icon">S</span><span>Scene Control<small>RESEARCH WORKSPACE</small></span></a>
-  <button class="nav new-chat" id="new-chat" hx-get="/view/prompt" hx-target="#workspace"><span class="nav-icon">＋</span><span>新对话</span></button>
+  <button class="nav new-chat" id="new-chat" hx-get="/view/prompt?new=1" hx-target="#workspace"><span class="nav-icon">＋</span><span>新对话</span></button>
   <a class="nav" data-nav="prompt" href="/?page=prompt" hx-get="/view/prompt" hx-target="#workspace"><span class="nav-icon">◧</span><span>Prompt</span></a>
   <a class="nav" data-nav="progress" href="/?page=progress" hx-get="/view/progress" hx-target="#workspace"><span class="nav-icon">≋</span><span>Progress</span></a>
   <div class="side-label">YOUR WORKSPACE</div>
   <p class="side-copy">从一个问题开始。<br>把计划变成可见的进展。</p>
   <div class="side-spacer"></div>
-  <div class="side-footer"><span class="preview-dot"></span> UI PREVIEW<small>仅预览排版与交互<br>未接入模型、GPU 或任务系统</small><button id="motion-toggle" aria-pressed="false">◌ 动效开启</button></div>
+  <div class="side-footer"><span class="preview-dot"></span> {{ 'WORKER ONLINE' if connected else 'WORKER OFFLINE' }}<small>{{ '真实 Codex 执行 · Claude 审核' if connected else '执行服务未就绪，发送不会启动任务' }}<br>GPU 卡片为排版示例</small><button id="motion-toggle" aria-pressed="false">◌ 动效开启</button></div>
 </aside>
 <div class="app">
   <header class="topbar">

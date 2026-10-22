@@ -98,6 +98,8 @@ class Store:
                 CREATE TABLE IF NOT EXISTS events(id INTEGER PRIMARY KEY AUTOINCREMENT, session TEXT NOT NULL,
                   turn TEXT, kind TEXT NOT NULL, body TEXT NOT NULL, created TEXT NOT NULL);
                 """)
+                if 'kind' not in {r[1] for r in db.execute('PRAGMA table_info(turns)')}:
+                    db.execute("ALTER TABLE turns ADD COLUMN kind TEXT NOT NULL DEFAULT 'task'")
 
     @contextlib.contextmanager
     def db(self, read_only=False):
@@ -153,7 +155,7 @@ class Store:
 
     def submit(self, request):
         expected = {"id", "session", "prompt", "mode", "effort", "skills"}
-        if type(request) is not dict or set(request) != expected:
+        if type(request) is not dict or not expected <= set(request) <= expected | {'model','kind'}:
             raise WorkerError("INVALID_WORKER_SUBMISSION")
         turn_id = ident(request["id"])
         session = ident(request["session"]) if request["session"] is not None else turn_id
@@ -168,6 +170,11 @@ class Store:
         capability = self.capability()
         if not capability["enabled"]:
             raise WorkerError("WORKER_SERVICE_UNAVAILABLE", 503)
+        requested_model = request.get('model') or capability['default_model']
+        kind=request.get('kind','task')
+        if kind not in ('task','analysis'):raise WorkerError('INVALID_WORK_KIND')
+        if request.get('model') and requested_model not in capability.get('models', []):
+            raise WorkerError('MODEL_NOT_AVAILABLE')
         names = {x["id"] for x in capability["skills"]}
         if any(x not in names for x in skills):
             raise WorkerError("UNKNOWN_WORKER_SKILL")
@@ -187,10 +194,12 @@ class Store:
                 if request["session"] is not None:
                     raise WorkerError("UNKNOWN_WORKER_SESSION", 404)
                 db.execute("INSERT INTO sessions(id,workspace,model,created) VALUES(?,?,?,?)",
-                           (session, str(self.workspace(session)), capability["default_model"], utc()))
+                           (session, str(self.workspace(session)), requested_model, utc()))
+            elif request.get('model') and requested_model != row['model']:
+                raise WorkerError('NEW_SESSION_REQUIRED_FOR_MODEL_CHANGE')
             stamp = utc()
-            db.execute("INSERT INTO turns(id,session,input_hash,prompt,mode,effort,skills,state,created,updated) VALUES(?,?,?,?,?,?,?,?,?,?)",
-                       (turn_id, session, binding, prompt, request["mode"], request["effort"], json.dumps(skills), "QUEUED", stamp, stamp))
+            db.execute("INSERT INTO turns(id,session,input_hash,prompt,mode,effort,skills,state,created,updated,kind) VALUES(?,?,?,?,?,?,?,?,?,?,?)",
+                       (turn_id, session, binding, prompt, request["mode"], request["effort"], json.dumps(skills), "QUEUED", stamp, stamp,kind))
             folder = safe_path(self.runtime / "turns" / turn_id)
             folder.mkdir(parents=True, exist_ok=False)
             save(folder / "request.json", request)

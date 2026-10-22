@@ -1,7 +1,10 @@
 """Flask/Jinja/HTMX layout preview. No CLI, task database or research integration."""
 from pathlib import Path
 import os
-from flask import Flask, abort, render_template, request, send_from_directory
+import uuid
+import secrets
+from flask import Flask, abort, render_template, request, send_from_directory, session
+import execution
 
 ROOT = Path(__file__).resolve().parent
 OWNER = 'ResearchAgentOrchestrator.UI.Preview'
@@ -9,6 +12,8 @@ OWNER = 'ResearchAgentOrchestrator.UI.Preview'
 
 def create_app():
     app = Flask(__name__, template_folder=str(ROOT/'templates'), static_folder=str(ROOT/'static'))
+    app.secret_key=secrets.token_bytes(32)
+    app.config.update(SESSION_COOKIE_SAMESITE='Strict',SESSION_COOKIE_HTTPONLY=True)
     app.config.update(MAX_CONTENT_LENGTH=32*1024, TEMPLATES_AUTO_RELOAD=True)
     options = dict(models=['GPT-6.1 Sol','GPT-6 Astra','GPT-6 Sol','GPT-6 Luna'],
                    efforts=['Low','Medium','High','Extra high','Max'],
@@ -29,7 +34,16 @@ def create_app():
         return response
 
     @app.context_processor
-    def context(): return dict(options=options)
+    def context():
+        live=execution.capability()
+        connected=live.get('enabled') is True
+        selected=dict(options)
+        if connected:
+            selected.update(models=live['models'],efforts=['Medium','High','Extra high'],speeds=['Standard'],modes=['Task'])
+        session.setdefault('csrf',secrets.token_urlsafe(32))
+        return dict(options=selected,connected=connected,worker=live,
+                    default_model=live.get('default_model') if connected else 'GPT-6.1 Sol',
+                    request_id=str(uuid.uuid4()),current_session=session.get('worker_session',''),csrf=session['csrf'])
 
     @app.get('/')
     def index():
@@ -40,6 +54,7 @@ def create_app():
     @app.get('/view/<page>')
     def view(page):
         if page not in ('prompt','progress'): abort(404)
+        if request.args.get('new')=='1':session.pop('worker_session',None)
         scenario=request.args.get('scenario','running')
         if scenario not in ('running','review','approval','blocked','complete'): abort(400)
         return render_template('partials/'+page+'.html',scenario=scenario)
@@ -52,13 +67,52 @@ def create_app():
         return render_template('partials/message.html',text=text,
                                channel=request.form.get('channel','codex'))
 
+    @app.post('/execute')
+    def execute():
+        if not secrets.compare_digest(request.form.get('csrf',''),session.get('csrf','invalid')):abort(403)
+        try:
+            result=execution.submit(request.form)
+            session['worker_session']=result['session']
+            return render_template('partials/execution.html',status=execution.status(result['session']),task=result,csrf=session['csrf'])
+        except (OSError,ValueError,KeyError) as error:
+            reason=str(error) if isinstance(error,ValueError) else 'WORKER_UNAVAILABLE'
+            return render_template('partials/execution_error.html',reason=reason),400
+
+    @app.get('/execution/status/<ident>')
+    def execution_status(ident):
+        try:return render_template('partials/execution.html',status=execution.status(ident),task={'session':ident},csrf=session.get('csrf',''))
+        except (OSError,ValueError,KeyError):abort(503)
+
+    @app.post('/execution/decision')
+    def decision():
+        if not secrets.compare_digest(request.form.get('csrf',''),session.get('csrf','invalid')):abort(403)
+        try:
+            value={k:request.form[k] for k in ('id','turn','decision')}
+            if value['decision']=='answer':value['answers']={k[7:]:v for k,v in request.form.items() if k.startswith('answer_')}
+            execution.store().decide(value)
+            return execution_status(request.form['session'])
+        except (OSError,ValueError,KeyError):abort(400)
+
+    @app.post('/execution/cancel')
+    def cancel():
+        if not secrets.compare_digest(request.form.get('csrf',''),session.get('csrf','invalid')):abort(403)
+        try:
+            execution.store().cancel({'id':request.form['id']})
+            return execution_status(request.form['session'])
+        except (OSError,ValueError,KeyError):abort(400)
+
+    @app.get('/execution/progress/<ident>')
+    def execution_progress(ident):
+        try:return render_template('partials/live-progress.html',live=execution.status(ident))
+        except (OSError,ValueError,KeyError):abort(503)
+
     @app.get('/avatars/<name>')
     def avatar(name):
         if name not in ('david.mp4','lucy.mp4','david.jpg','lucy.jpg'): abort(404)
         return send_from_directory(ROOT.parent/'assets'/'avatars',name)
 
     @app.get('/preview-health')
-    def health(): return dict(owner=OWNER,ui_only=True,pid=os.getpid())
+    def health(): return dict(owner=OWNER,ui_only=not execution.capability().get('enabled'),pid=os.getpid())
     return app
 
 
