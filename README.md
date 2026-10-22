@@ -1,5 +1,12 @@
 # Research Agent Orchestrator
 
+> **New UI-only design preview:** [Flask + Jinja2 + HTMX workspace](ui_preview/README.md).
+> Prompt / Progress pages, compact GPU chip on Prompt, cyberpunk accents and
+> model/effort/permission/speed/Task/Plan/Goal controls are available for layout
+> iteration. Every status and reply in that preview is illustrative. It is separate
+> from the installed software and does not call models or run tasks. Frontend layout
+> changes are exempt from Claude review by the user's explicit instruction.
+
 > **Status: PARTIAL overall — desktop UI update deployed locally; native worker paused.**
 > The desktop release at commit `111b6f4` passed 184 UI/desktop/worker regression
 > tests, a fresh fixed-source Claude audit, installed native video/layout checks,

@@ -1,0 +1,5 @@
+<label class="setting permission"><span class="sr-only">权限</span><select name="permission" data-draft aria-label="权限模式">{% for x in options.permissions %}<option>{{ x }}</option>{% endfor %}</select></label>
+<label class="setting"><span class="sr-only">模型</span><select name="model" data-draft aria-label="模型">{% for x in options.models %}<option>{{ x }}</option>{% endfor %}</select></label>
+<label class="setting"><span class="sr-only">推理强度</span><select name="effort" data-draft aria-label="推理强度">{% for x in options.efforts %}<option{% if x=='Extra high' %} selected{% endif %}>{{ x }}</option>{% endfor %}</select></label>
+<label class="setting"><span class="sr-only">速度</span><select name="speed" data-draft aria-label="速度模式">{% for x in options.speeds %}<option>{{ x }}</option>{% endfor %}</select></label>
+<label class="setting mode"><span class="sr-only">工作模式</span><select name="mode" data-draft aria-label="Task Plan Goal">{% for x in options.modes %}<option>{{ x }}</option>{% endfor %}</select></label>
