@@ -15,7 +15,20 @@ with short opacity/scale transitions, keyboard navigation and Escape dismissal.
 renders a template response. No CLI, SSH, research file, production queue, approval,
 subscription or API is connected. Frontend layout changes do not require Claude
 review under the user's explicit 2026-10-22 instruction. Backend integration remains
-a later task after layout approval. The old installed software is untouched.
+a later task after layout approval. The accepted orchestration service remains
+unchanged. The existing **BGV Scene Control** desktop and Start menu entries can
+now open this approved interface in the native **Scene Control** window:
+
+```powershell
+& 'E:\Github\Research-Agent-Orchestrator\tools\approved-ui.ps1' -Mode Install
+& 'E:\Github\Research-Agent-Orchestrator\tools\approved-ui.ps1' -Mode Open
+```
+
+Installation backs up and verifies both owned original shortcuts. `-Mode Status`
+shows their destinations; `-Mode Restore` restores the verified originals.
+It does not replace the frozen worker/service snapshots or change scheduled
+tasks. The window still clearly labels the current UI-only scope. Reopening
+focuses the same UI window without clearing its draft.
 
 From this configured machine, open the separate native preview:
 
@@ -26,7 +39,9 @@ From this configured machine, open the separate native preview:
 The small existing-technology WebView2 shell displays the Flask interface as a
 desktop window. The Flask server binds only 127.0.0.1:8877. No scheduled task is
 installed; reopening after reboot starts only this preview server as needed. It
-does not replace the main software, restart jobs or open an ordinary browser.
+does not restart jobs or open an ordinary browser. `Start-Preview.ps1 -Desktop`
+uses the installed-window title and a separate native shell; the default command
+continues to open the explicitly named preview.
 
 For a new checkout, create a project virtual environment and install
 `ui_preview/requirements.txt`. Run `python -B ui_preview/app.py` to start the

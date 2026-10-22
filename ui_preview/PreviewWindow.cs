@@ -1,16 +1,21 @@
 // Presentation-only WebView2 shell. No task/model bridge or production connection.
 using System;
 using System.IO;
+using System.Threading;
+using System.Runtime.InteropServices;
 using System.Windows.Forms;
 using Microsoft.Web.WebView2.WinForms;
 using Microsoft.Web.WebView2.Core;
 
 class PreviewWindow : Form
 {
+    static uint activateMessage;
+    [DllImport("user32.dll", CharSet=CharSet.Unicode)] static extern uint RegisterWindowMessage(string name);
+    [DllImport("user32.dll")] static extern bool PostMessage(IntPtr window, uint message, IntPtr w, IntPtr l);
     readonly WebView2 web = new WebView2();
-    PreviewWindow()
+    PreviewWindow(bool desktop)
     {
-        Text = "Scene Control · UI Preview";
+        Text = desktop ? "Scene Control" : "Scene Control · UI Preview";
         WindowState = FormWindowState.Maximized;
         MinimumSize = new System.Drawing.Size(850,600);
         BackColor = System.Drawing.Color.FromArgb(11,17,27);
@@ -34,5 +39,25 @@ class PreviewWindow : Form
             } catch(Exception) { MessageBox.Show("UI 预览未能连接。请重新运行 Start-Preview.ps1。",Text); Close(); }
         };
     }
-    [STAThread] static void Main() { Application.EnableVisualStyles(); Application.Run(new PreviewWindow()); }
+    protected override void WndProc(ref Message message)
+    {
+        if (message.Msg == activateMessage) {
+            if (WindowState == FormWindowState.Minimized) WindowState = FormWindowState.Maximized;
+            Show(); Activate();
+        }
+        base.WndProc(ref message);
+    }
+    [STAThread] static void Main(string[] args)
+    {
+        bool desktop = Array.IndexOf(args,"--desktop") >= 0;
+        string identity = "ResearchAgentOrchestrator.ApprovedUI."+(desktop ? "Desktop" : "Preview");
+        activateMessage = RegisterWindowMessage(identity+".Activate");
+        bool first;
+        using (var mutex = new Mutex(true,"Local\\"+identity,out first)) {
+            if (!first) { PostMessage(new IntPtr(0xffff),activateMessage,IntPtr.Zero,IntPtr.Zero); return; }
+            Application.EnableVisualStyles();
+            Application.Run(new PreviewWindow(desktop));
+            mutex.ReleaseMutex();
+        }
+    }
 }
