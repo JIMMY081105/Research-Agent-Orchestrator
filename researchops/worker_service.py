@@ -68,7 +68,6 @@ class Service:
         model_rows = self.rpc.call("model/list", {}).get("data", [])
         self.models = [v["id"] for v in model_rows if type(v.get("id")) is str]
         preferred_model = next((v["id"] for v in model_rows if v.get("isDefault") is True), None)
-        if 'gpt-6.1-sol' in self.models:preferred_model='gpt-6.1-sol'
         if not preferred_model or preferred_model not in self.models:
             raise WorkerError("NATIVE_AVAILABLE_DEFAULT_MODEL_MISSING")
         rows = self.rpc.call("skills/list", {"cwds": [str(self.store.runtime)], "forceReload": False}).get("data", [])
@@ -148,6 +147,8 @@ class Service:
                 raise WorkerError('REPAIR_INPUT_CHANGED_REQUIRES_RECONCILIATION')
             prompt += '\nIndependent Claude review requests the following corrections. Preserve the original task scope and permissions; do not invoke AI.\n' + json.dumps(repair['issues'], ensure_ascii=False)
         attempt = self.store.runtime / 'turns' / turn['id'] / 'attempts' / str(turn.get('reworks', 0))
+        if attempt.exists():
+            raise WorkerError('ATTEMPT_ALREADY_STARTED_NEEDS_RECONCILIATION')
         attempt.mkdir(parents=True, exist_ok=False)
         save(attempt / 'request.json', {'prompt': prompt, 'input_hash': turn['input_hash'], 'created_at': utc()})
         items = [{"type": "text", "text": prompt}]

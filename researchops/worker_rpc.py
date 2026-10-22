@@ -18,7 +18,10 @@ class NativeProcess:
     def __init__(self, args, cwd, environment, on_start):
         if os.name != "nt":
             raise WorkerError("WINDOWS_REQUIRED")
-        self.job = wp._owned_job(8192)
+        # App-server, Code Mode host, sandbox brokers and the user's shell all
+        # share this job. Eight processes can exhaust the native tool startup.
+        # Retain finite process/memory bounds and kill-on-close ownership.
+        self.job = wp._owned_job(8192, process_limit=32)
         self.process = None
         self.files = []
         pi, handles, attributes = wp.ProcessInfo(), [], None
@@ -100,7 +103,7 @@ class Rpc:
             environment.pop(key, None)
         args = [str(executable), "app-server", "--listen", "stdio://", "-c", 'model_provider="openai"',
                 "-c", "features.shell_tool=true", "-c", "features.unified_exec=true",
-                "-c", "features.code_mode=false", "-c", "features.code_mode_host=false",
+                "-c", "features.code_mode=false", "-c", "features.code_mode_host=true",
                 "-c", "features.multi_agent=false", "-c", "features.multi_agent_v2=false"]
         self.process = NativeProcess(args, cwd, environment, on_start)
         self.messages = queue.Queue(maxsize=1000)

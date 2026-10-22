@@ -1,37 +1,14 @@
 # Research Agent Orchestrator
 
-> **New UI-only design preview:** [Flask + Jinja2 + HTMX workspace](ui_preview/README.md).
-> Prompt / Progress pages, compact GPU chip on Prompt, cyberpunk accents and
-> model/effort/permission/speed/Task/Plan/Goal controls are available for layout
-> iteration. Every status and reply in that preview is illustrative. It is separate
-> from the installed software and does not call models or run tasks. Frontend layout
-> changes are exempt from Claude review by the user's explicit instruction.
+**Status: PARTIAL — the new execution integration is a candidate and has not been installed as an accepted worker.**
 
-> **Status: PARTIAL overall — desktop UI update deployed locally; native worker paused.**
-> The desktop release at commit `111b6f4` passed 184 UI/desktop/worker regression
-> tests, a fresh fixed-source Claude audit, installed native video/layout checks,
-> a natural Windows time-trigger receipt and real Disable/Enable/reopen checks.
-> This accepts the desktop update, not a new native-worker deployment. The native
-> worker remains paused/unregistered; its current real dual-CLI and scheduler
-> acceptance is outstanding. Existing bounded analysis and read-only telemetry
-> remain separate. No server research task, building gate or GPU result is certified.
-> The conversation/stage view has its own fixed-snapshot acceptance; the earlier
-> 184-test record applies to `111b6f4`, not to a newly edited checkout.
-> Original downloads, private runtime and acceptance records are not published.
+The approved cyberpunk desktop layout now has a Flask + Jinja2 + HTMX execution interface in source: Prompt for explicit tasks or read-only text analysis, Progress for actual owned turn/review records, and native Approval needed / Full Access profiles. The compact GPU chip in this new layout is still demonstration data. Without a verified enabled worker, task submission stays disabled.
 
+A finite development test has exercised real Codex execution → tool-disabled Claude REWORK → automatic correction → fresh Claude PASS. An injected wrong artifact was explicitly detected, then independently read back after repair. This is not installed UI acceptance or a natural scheduler receipt. Independent source review still returned REWORK, so activation remains blocked. Full local receipts and histories are not committed here.
 
-A Windows desktop control room for **Codex execution, Claude review and research
-operations visibility**, using existing CLI subscription logins.
+Reviews use complete bounded differences and necessary source context, a single provider turn with strict local JSON/binding validation, and provider-reported token counters. No blanket token-saving percentage is claimed. [Integration behavior and remaining gates](EXECUTION-INTEGRATION.md) · [UI source and launch instructions](ui_preview/README.md).
 
-![Scene Control with animated David and Lucy portraits](docs/images/scene-control-live.gif)
-
-*Animated UI preview rendered from the current interface with synthetic demonstration
-status. No live jobs, prompts, sessions or research records are shown. This is not
-deployment or scientific acceptance evidence. [Static preview](docs/images/scene-control.png).*
-
-The same cropped, silent clips used by the desktop are included in
-[`assets/avatars/`](assets/avatars). The full UI animation plays directly on this page;
-the application uses the pinned MP4 files at their original playback speed.
+This repository is software development. Private scientific reports/results are delivered separately to Building-Generation-Validation for user review. No branch merges, research-source edits, GPU work or Factory80 batch release are performed by publishing this software.
 
 ## What belongs here
 
@@ -50,64 +27,17 @@ Scene/quality-gate modules here are integration adapters and evidence contracts.
 Publishing this software does not launch a job, adopt an existing session, certify
 a building, or authorize research changes.
 
-## Desktop features
+## Desktop and execution
 
-| Section | Controls and information |
-| --- | --- |
-| Mission | Conversation above a bottom composer, references/skills above the input, optional system/history drawer |
-| Compute | Read-only SQZ GPU utilization, memory, temperature and observation freshness |
-| Codex / David | Large outside-left portrait, reported model/effort/permissions, execution phase and scrolling public records |
-| Claude / Lucy | Large outside-right portrait, reported review settings, independent review phase and bounded feedback |
+- **Prompt:** bottom composer, reference material, actual supported model/effort selection and native permission profiles. Task/Standard is connected in the candidate; Plan/Goal/Fast are not accepted execution modes.
+- **Progress:** per-browser owned sessions, public events, explicit approval requests and actual review results; idle refreshes make no model calls.
+- **Text analysis:** always a fresh native read-only session. It cannot inherit an existing write-capable session.
+- **Corrections:** at most two repairs using concrete independent findings, preserving the original input and every attempt. Crashes or uncertain starts require reconciliation rather than replay.
+- **Boundaries:** Full Access intentionally removes OS directory confinement and command approval for the selected turn; task authorization still governs research, GPU and publication. Approval mode retains native restrictions. The shared daily review cap is 50; charges and failures are retained.
 
-- **Approval needed / Full Access:** native permission profiles captured per turn.
-  Approval needed uses a Windows workspace sandbox; Full Access removes that sandbox
-  and command-by-command approval. Changing the selector affects the next turn,
-  never a pending request or an already running turn.
-- **Independent services:** closing or upgrading the UI does not restart the worker
-  or take over an unrelated Codex/research process.
-- **Evidence over claims:** task IDs, immutable source/input hashes, shared review
-  accounting and artifact checks. A workspace PASS is not a physics simulation PASS.
-- **Bounded operation:** no recursive agents, paid API fallback, automatic GitHub
-  publication/merge, or blind replay after an uncertain crash.
-- **Idle without model calls:** status refreshes do not invoke models. The legacy
-  bounded queue checks every 15 minutes; explicit worker submissions start promptly.
-- **Local animated portraits:** matching square David/Lucy video frames, silent
-  loops, original playback speed, pause/reduced-motion support and sprite fallback.
-  Native playback, pause/resume and layout passed the installed desktop checks.
-  See [AVATARS.md](AVATARS.md) for the versioned portrait assets and their provenance.
-- **One stable desktop entry:** Desktop, Start menu and taskbar shortcuts resolve
-  the currently accepted snapshot. Opening again focuses the same version's window
-  and checks the local connection without discarding an unsent draft. If its owned
-  service needs recovery, connection attempts are bounded; an explicitly disabled
-  service stays disabled.
+The Desktop/Start/taskbar Scene Control entry opens the approved layout. The candidate backend is deliberately not activated while its independent source gate remains unpassed. Existing observer/legacy desktop services are separate and unchanged. See [EXECUTION-INTEGRATION.md](EXECUTION-INTEGRATION.md), [WORKER.md](WORKER.md), [POLICY.md](POLICY.md) and [OPERATIONS.md](OPERATIONS.md).
 
-The conversation UI shows the real registered execution/review cycle, slow running
-pulses and evidence-triggered handoffs. Model/effort/permission fields use backend
-records; missing values remain unknown. It does not reveal hidden reasoning or
-invent a research plan from prose. See [UI.md](UI.md) for controls and exact limits.
-
-Stack: Python 3.12 (primarily standard library), SQLite, C#/.NET Framework 4.8 with
-WebView2, HTML/CSS/JavaScript, PowerShell and Windows Task Scheduler.
-
-## Use and deployment
-
-On the configured Windows machine open **BGV Scene Control** from Desktop, Start
-or the taskbar pin. The installed desktop connects to its owned local service;
-**文本分析** retains its separate bounded, tool-disabled workflow.
-
-The **Codex 工作** interface supports tasks, permission selection and approval cards
-with **允许这一次 / 拒绝**. These execution controls require an accepted, enabled native
-worker. That worker is currently paused/unregistered; publishing its source does not
-activate it or make it available for research dispatch.
-
-This is currently a single-machine deployment, not a portable installer. Helpers
-intentionally retain the existing `E:\Github\Building-Generation-Validation`
-runtime root so publishing this source does not disturb running services. Existing
-CLI login, registered tools and private configuration are not bundled. See
-[WORKER.md](WORKER.md), [DESKTOP.md](DESKTOP.md), [POLICY.md](POLICY.md) and
-[OPERATIONS.md](OPERATIONS.md) for deployment, ownership, recovery and maintenance.
-Permission selection is separate from authorizing a research goal. See
-[STAGES.md](STAGES.md) for project roles and the four-stage workflow.
+The following sections describe the separate existing bounded controller and earlier integration contracts; they do not certify this candidate or grant a research goal.
 
 ## Bounded controller and integration details
 

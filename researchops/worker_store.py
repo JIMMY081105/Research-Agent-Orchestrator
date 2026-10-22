@@ -173,6 +173,8 @@ class Store:
         requested_model = request.get('model') or capability['default_model']
         kind=request.get('kind','task')
         if kind not in ('task','analysis'):raise WorkerError('INVALID_WORK_KIND')
+        if kind=='analysis' and (request['session'] is not None or request['mode']!='approval'):
+            raise WorkerError('ANALYSIS_REQUIRES_FRESH_READ_ONLY_SESSION')
         if request.get('model') and requested_model not in capability.get('models', []):
             raise WorkerError('MODEL_NOT_AVAILABLE')
         names = {x["id"] for x in capability["skills"]}

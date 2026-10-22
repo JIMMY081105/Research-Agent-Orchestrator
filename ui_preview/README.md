@@ -1,4 +1,16 @@
-# UI-only preview
+# Scene Control workspace
+
+Flask + Jinja2 + HTMX with small native JavaScript, hosted in the Windows WebView2 desktop shell. Prompt and Progress retain the approved cyberpunk chat layout.
+
+The execution integration is a **candidate, not an accepted worker deployment**. With an independently accepted and installed worker it submits explicit Codex tasks, displays native approvals, polls real progress, and shows tool-disabled Claude review plus at most two repairs. Without that worker, submission stays disabled. The local design preview remains available.
+
+Task/Standard and read-only text analysis are connected in the candidate. Model choices come from the actual CLI. Plan, Goal and Fast are design controls only when disconnected and are rejected by the execution endpoint; they must not imply supported native modes. The GPU chip currently remains demonstration telemetry in this new layout. Full Access removes the native directory sandbox and approvals for that turn; it does not authorize GPU work, research edits or publication.
+
+Browser sessions own their task/status/approval views. UI refreshes invoke no models. Closing or editing the UI does not adopt an old CLI session or restart research jobs.
+
+See [execution integration](../EXECUTION-INTEGRATION.md) for limits and deployment gates.
+
+## Earlier layout preview instructions
 
 ![Prompt layout, synthetic data](preview-prompt.png)
 

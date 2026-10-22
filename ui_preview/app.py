@@ -1,4 +1,4 @@
-"""Flask/Jinja/HTMX layout preview. No CLI, task database or research integration."""
+"""Loopback Flask/Jinja/HTMX UI for the independently installed worker."""
 from pathlib import Path
 import os
 import uuid
@@ -41,9 +41,19 @@ def create_app():
         if connected:
             selected.update(models=live['models'],efforts=['Medium','High','Extra high'],speeds=['Standard'],modes=['Task'])
         session.setdefault('csrf',secrets.token_urlsafe(32))
+        session.permanent=True
+        request_id=str(uuid.uuid4())
+        session['request_ids']=(session.get('request_ids',[])+[request_id])[-32:]
         return dict(options=selected,connected=connected,worker=live,
-                    default_model=live.get('default_model') if connected else 'GPT-6.1 Sol',
-                    request_id=str(uuid.uuid4()),current_session=session.get('worker_session',''),csrf=session['csrf'])
+                    default_model=('gpt-6.1-sol' if 'gpt-6.1-sol' in live.get('models',[]) else live.get('default_model')) if connected else 'GPT-6.1 Sol',
+                    request_id=request_id,current_session=session.get('worker_session',''),csrf=session['csrf'])
+
+    def owned(ident):
+        if ident not in session.get('owned_worker_sessions',[]):abort(403)
+
+    def owned_turn(ident,turn):
+        owned(ident)
+        if turn not in {t['id'] for t in execution.status(ident)['turns']}:abort(403)
 
     @app.get('/')
     def index():
@@ -70,9 +80,12 @@ def create_app():
     @app.post('/execute')
     def execute():
         if not secrets.compare_digest(request.form.get('csrf',''),session.get('csrf','invalid')):abort(403)
+        if request.form.get('request_id') not in session.get('request_ids',[]):abort(403)
+        if request.form.get('session'):owned(request.form['session'])
         try:
             result=execution.submit(request.form)
             session['worker_session']=result['session']
+            session['owned_worker_sessions']=list(dict.fromkeys(session.get('owned_worker_sessions',[])+[result['session']]))[-20:]
             return render_template('partials/execution.html',status=execution.status(result['session']),task=result,csrf=session['csrf'])
         except (OSError,ValueError,KeyError) as error:
             reason=str(error) if isinstance(error,ValueError) else 'WORKER_UNAVAILABLE'
@@ -80,6 +93,7 @@ def create_app():
 
     @app.get('/execution/status/<ident>')
     def execution_status(ident):
+        owned(ident)
         try:return render_template('partials/execution.html',status=execution.status(ident),task={'session':ident},csrf=session.get('csrf',''))
         except (OSError,ValueError,KeyError):abort(503)
 
@@ -87,6 +101,7 @@ def create_app():
     def decision():
         if not secrets.compare_digest(request.form.get('csrf',''),session.get('csrf','invalid')):abort(403)
         try:
+            owned_turn(request.form['session'],request.form['turn'])
             value={k:request.form[k] for k in ('id','turn','decision')}
             if value['decision']=='answer':value['answers']={k[7:]:v for k,v in request.form.items() if k.startswith('answer_')}
             execution.store().decide(value)
@@ -97,12 +112,14 @@ def create_app():
     def cancel():
         if not secrets.compare_digest(request.form.get('csrf',''),session.get('csrf','invalid')):abort(403)
         try:
+            owned_turn(request.form['session'],request.form['id'])
             execution.store().cancel({'id':request.form['id']})
             return execution_status(request.form['session'])
         except (OSError,ValueError,KeyError):abort(400)
 
     @app.get('/execution/progress/<ident>')
     def execution_progress(ident):
+        owned(ident)
         try:return render_template('partials/live-progress.html',live=execution.status(ident))
         except (OSError,ValueError,KeyError):abort(503)
 

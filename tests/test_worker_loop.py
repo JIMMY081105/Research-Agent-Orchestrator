@@ -3,13 +3,38 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
-from unittest.mock import Mock,patch
+from unittest.mock import Mock,MagicMock,patch
 from tests import test_worker_service as fixture
 from researchops.worker_context import packet
 from researchops.worker_store import WorkerError
 
 
 class ContextTests(unittest.TestCase):
+    def test_shared_accounting_contention_pauses_before_reserving_call(self):
+        from types import SimpleNamespace
+        from researchops.worker_review import charge
+        class Busy(Exception):pass
+        lock=MagicMock();lock.__enter__.side_effect=Busy()
+        core=SimpleNamespace(Busy=Busy,Lock=Mock(return_value=lock))
+        with patch('researchops.worker_review.active',return_value=(None,core,None,{},{})),patch('researchops.worker_review.time.monotonic',side_effect=[0,4]),patch('researchops.worker_review.sqlite3.connect') as connect:
+            with self.assertRaisesRegex(WorkerError,'SHARED_REVIEW_ACCOUNTING_BUSY_NO_CALL_RESERVED'):charge(Path('unused'),'claude','test','review')
+        connect.assert_not_called()
+    def test_owned_process_cap_is_bounded_before_creating_job(self):
+        from researchops.winproc import _owned_job
+        for limit in (0,33,True,'32'):
+            with self.assertRaises(ValueError):_owned_job(8192,process_limit=limit)
+    def test_single_turn_json_judgment_is_strictly_validated_locally(self):
+        from researchops.adapters import validate_review_json,CallError
+        schema={'properties':{'binding_sha256':{'const':'expected'},'verdict':{'enum':['PASS','REWORK']},'issues':{'maxItems':2,'items':{'maxLength':20}}}}
+        validate_review_json({'binding_sha256':'expected','verdict':'PASS','issues':[]},schema)
+        for value in ({'binding_sha256':'wrong','verdict':'PASS','issues':[]}, {'binding_sha256':'expected','verdict':'PASS','issues':['x'*21]}, {'binding_sha256':'expected','verdict':'PASS','issues':[],'extra':True}):
+            with self.assertRaises(CallError):validate_review_json(value,schema)
+    def test_source_review_newlines_do_not_duplicate_unchanged_code(self):
+        from tools.deploy_execution import source_change
+        value=source_change('x.py',b'a=1\r\nb=2\r\n',b'a=1\nb=3\n',True)
+        self.assertIn('-b=2',value['diff']);self.assertIn('+b=3',value['diff'])
+        self.assertNotIn('-a=1',value['diff']);self.assertEqual(value['line_endings']['before_crlf'],2)
+        self.assertNotEqual(value['before_sha256'],value['after_sha256'])
     def snapshot(self,text='value=1\n'):
         return dict(files={'x.py':{'sha256':text}},contents={'x.py':text},sha256=text)
     def test_complete_diff_and_unchanged_source_remain_bound(self):
@@ -33,8 +58,29 @@ class AutoLoopTests(unittest.TestCase):
     setUp=fixture.WorkerServiceTests.setUp
     turn=fixture.WorkerServiceTests.turn
     begin=fixture.WorkerServiceTests.begin
+    def test_analysis_cannot_resume_an_execution_session(self):
+        import uuid
+        prior=self.turn('full')
+        with self.assertRaisesRegex(WorkerError,'FRESH_READ_ONLY_SESSION'):
+            self.store.submit(dict(id=str(uuid.uuid4()),session=prior['session'],prompt='Analyze text',mode='approval',effort='high',skills=[],kind='analysis'))
+    def test_analysis_starts_fresh_with_actual_readonly_policy(self):
+        import uuid
+        self.store.submit(dict(id=str(uuid.uuid4()),session=None,prompt='Analyze text',mode='approval',effort='high',skills=[],kind='analysis'))
+        turn=self.service.next_turn()
+        self.service.rpc.call.side_effect=[{'thread':{'id':'owned'},'model':turn['model'],'approvalPolicy':'untrusted','sandbox':{'type':'readOnly'}},{'turn':{'id':'native'}}]
+        with patch('researchops.worker_service.charge',return_value='call'):self.service.begin(turn)
+        self.assertEqual(self.service.rpc.call.call_args.args[1]['sandboxPolicy'],{'type':'readOnly'})
     def completed(self,turn):
         self.service.handle({'method':'turn/completed','params':{'threadId':'owned','turn':{'id':'native','status':'completed'}}})
+    def test_existing_attempt_requires_reconciliation_without_model_charge(self):
+        turn=self.turn()
+        attempt=self.store.runtime/'turns'/turn['id']/'attempts'/'0'
+        attempt.mkdir(parents=True)
+        self.service.rpc.call.return_value={'thread':{'id':'owned'},'model':turn['model'],'approvalPolicy':'untrusted','sandbox':{'type':'workspaceWrite'}}
+        with patch('researchops.worker_service.charge') as charged,self.assertRaisesRegex(WorkerError,'ATTEMPT_ALREADY_STARTED_NEEDS_RECONCILIATION'):
+            self.service.begin(turn)
+        charged.assert_not_called()
+        self.assertFalse(any(c.args[0]=='turn/start' for c in self.service.rpc.call.call_args_list))
     def test_rework_is_persisted_and_requeued_with_findings(self):
         turn=self.turn();self.begin(turn)
         self.review.return_value={'verdict':'REWORK','issues':['Fix the sum'],'binding_sha256':'b'*64}

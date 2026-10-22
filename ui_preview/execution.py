@@ -50,8 +50,9 @@ def submit(form):
     permissions={'Approval needed':'approval','Full Access':'full'}
     efforts={'Medium':'medium','High':'high','Extra high':'xhigh'}
     if form.get('permission') not in permissions or form.get('effort') not in efforts:raise ValueError('UNSUPPORTED_SETTINGS')
-    result=store().submit({'id':form.get('request_id') or '', 'session':form.get('session') or None,
-        'prompt':prompt,'mode':permissions[form['permission']],'effort':efforts[form['effort']],
+    analysis=form.get('channel')=='analysis'
+    result=store().submit({'id':form.get('request_id') or '', 'session':None if analysis else form.get('session') or None,
+        'prompt':prompt,'mode':'approval' if analysis else permissions[form['permission']],'effort':efforts[form['effort']],
         'skills':[],'model':form.get('model'),'kind':'analysis' if form.get('channel')=='analysis' else 'task'})
     return result
 

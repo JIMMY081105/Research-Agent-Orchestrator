@@ -1,5 +1,7 @@
 {% if connected and current_session %}
 <section data-view="progress" class="progress-page" hx-get="/execution/progress/{{ current_session }}" hx-trigger="load" hx-swap="outerHTML">读取真实任务进度…</section>
+{% elif connected %}
+<section class="progress-page" data-view="progress"><header class="progress-heading"><div><p class="eyebrow">MISSION CONTROL / LIVE</p><h1>等待你的任务</h1><p>在 Prompt 页面提交任务后，这里会显示执行、审核与结果。</p></div></header></section>
 {% else %}
 {% set steps=['接收任务','执行','独立审核','结果'] %}
 {% set phase=2 if scenario=='review' else 3 if scenario=='complete' else 1 %}
