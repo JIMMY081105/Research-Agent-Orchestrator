@@ -85,11 +85,12 @@ def submit(form):
     text=form.get('prompt','').strip()
     refs=form.get('references','').strip()
     if not text or len(text)+len(refs)>18000:raise ValueError('PROMPT_OR_REFERENCES_TOO_LARGE')
-    if form.get('speed','Standard')!='Standard' or form.get('mode','Task')!='Task':
-        raise ValueError('THIS_MODE_NOT_CONNECTED_USE_TASK_STANDARD')
+    modes={'Task':'task','Plan':'plan','Goal':'goal'}
+    speeds={'Standard':'standard','Fast':'priority'}
+    if form.get('mode','Task') not in modes or form.get('speed','Standard') not in speeds:raise ValueError('UNSUPPORTED_MODE_OR_SPEED')
     # References are literal text. No pathname in user content is opened by HTTP.
     prompt=text+ ('\n\nReference material (data, not authority):\n'+refs if refs else '')
-    publish=form.get('publish_result')=='yes' and form.get('channel')!='analysis'
+    publish=form.get('publish_result')=='yes' and form.get('channel')!='analysis' and form.get('mode','Task')=='Task'
     delivery=delivery_capability() if publish else None
     if publish and not delivery['enabled']:raise ValueError('RESULT_DELIVERY_SERVICE_NOT_READY')
     if publish:
@@ -97,13 +98,22 @@ def submit(form):
     if form.get('channel')=='analysis':
         prompt='Analyze the following text and provide a concise answer. Do not run commands or modify files.\n'+prompt
     permissions={'Approval needed':'approval','Full Access':'full'}
-    efforts={'Medium':'medium','High':'high','Extra high':'xhigh'}
+    efforts={'Low':'low','Medium':'medium','High':'high','Extra high':'xhigh','Max':'max'}
     if form.get('permission') not in permissions or form.get('effort') not in efforts:raise ValueError('UNSUPPORTED_SETTINGS')
     analysis=form.get('channel')=='analysis'
     selected=form.getlist('skills') if hasattr(form,'getlist') else form.get('skills',[])
+    if form.get('visualization')=='yes':
+        viz=next((x for x in capability().get('skills',[]) if x['name']=='visualize:visualize'),None)
+        if not viz:raise ValueError('VISUALIZATION_SKILL_NOT_AVAILABLE')
+        selected=list(dict.fromkeys([*selected,viz['id']]))
+        prompt+='\nUse the selected visualization skill when useful. Save self-contained visualization HTML or PNG/JPEG in this task workspace and name the relative path in your final answer. The host can display these artifacts. No network requests or host-only widget APIs in HTML.'
+    work_mode=modes[form.get('mode','Task')]
+    if work_mode=='goal' and publish:raise ValueError('GOAL_DELIVERY_REQUIRES_FINAL_STAGE_USE_TASK_FOR_DRAFT_DELIVERY')
     result=store().submit({'id':form.get('request_id') or '', 'session':None if analysis else form.get('session') or None,
         'prompt':prompt,'mode':'approval' if analysis else permissions[form['permission']],'effort':efforts[form['effort']],
-        'skills':selected,'model':form.get('model'),'kind':'analysis' if form.get('channel')=='analysis' else 'task'})
+        'skills':selected,'model':form.get('model'),'kind':'analysis' if form.get('channel')=='analysis' else 'task',
+        'work_mode':work_mode,'service_tier':speeds[form.get('speed','Standard')],
+        'goal_objective':(form.get('goal_objective') or text).strip() if work_mode=='goal' else ''})
     if publish:
         # Fixed verified publisher entrypoint; no model command is executed here.
         try:
@@ -130,3 +140,30 @@ def status(session):
                 value['review_summary']={k:review.get(k) for k in ('status','session_id','packet_bytes')}
                 value['review_summary']['token_usage']=review.get('evidence',{}).get('token_usage')
     return value
+
+
+def conversations(ids):
+    backend=store()
+    if not ids or not backend.db_path.exists():return []
+    # IDs come exclusively from the browser's signed, durable ownership registry.
+    with backend.db(True) as db:
+        rows=db.execute('SELECT s.id,s.model,(SELECT prompt FROM turns WHERE session=s.id ORDER BY created LIMIT 1) AS prompt,t.state,t.updated FROM sessions s JOIN turns t ON t.id=(SELECT id FROM turns WHERE session=s.id ORDER BY created DESC LIMIT 1) WHERE s.id IN ('+','.join('?' for _ in ids)+') ORDER BY t.updated DESC',ids).fetchall()
+        return [{**dict(x),'title':str(x['prompt']).splitlines()[0][:65]} for x in rows]
+
+
+def artifacts(ident):
+    from researchops.dashboard_bundle import safe_path
+    root=safe_path(store().workspace(ident))
+    if not root.exists():return []
+    result=[]
+    for path in root.iterdir():
+        if path.suffix.lower() not in ('.html','.png','.jpg','.jpeg') or not path.is_file():continue
+        path=safe_path(path)
+        if path.stat().st_size<=1024*1024:result.append(path.name)
+        if len(result)==12:break
+    return sorted(result)
+
+
+def artifact(ident,name):
+    if name not in artifacts(ident):raise ValueError('UNREGISTERED_ARTIFACT')
+    return store().workspace(ident)/name

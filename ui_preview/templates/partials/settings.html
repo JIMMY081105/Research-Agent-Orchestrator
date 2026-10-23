@@ -8,8 +8,9 @@
   </div>
 </div>
 {% endmacro %}
-{{ picker('permission','执行权限',options.permissions,'Approval needed','permission') }}
+{% set current_settings=current_settings|default({}) %}
+{{ picker('permission','执行权限',options.permissions,current_settings.get('permission','Approval needed'),'permission') }}
 {{ picker('model','模型',options.models,default_model|default(options.models[0])) }}
-{{ picker('effort','推理强度',options.efforts,'Extra high') }}
-{{ picker('speed','速度',options.speeds,'Standard') }}
-{{ picker('mode','工作模式',options.modes,'Task','mode') }}
+{{ picker('effort','推理强度',options.efforts,current_settings.get('effort','Extra high')) }}
+{{ picker('speed','速度',options.speeds,current_settings.get('speed','Standard')) }}
+{{ picker('mode','工作模式',options.modes,current_settings.get('mode','Task'),'mode') }}
