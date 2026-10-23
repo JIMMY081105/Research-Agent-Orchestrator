@@ -43,6 +43,7 @@
     q('#page-name').textContent = page === 'prompt' ? 'Prompt' : 'Progress';
     document.querySelectorAll('[data-nav]').forEach(e => e.setAttribute('aria-current', e.dataset.nav === page ? 'page' : 'false'));
     document.querySelectorAll('[data-draft]').forEach(e => {
+      if(e.name==='goal_objective'&&e.readOnly){draft.set(e.name,e.value);return;}
       if (!draft.has(e.name)) return;
       const group=e.closest('[data-setting]'),value=draft.get(e.name);
       if(group&&!Array.from(group.querySelectorAll('[data-option]')).some(o=>o.dataset.option===value)){draft.set(e.name,e.value);return;}
@@ -102,7 +103,7 @@
     const open = e.newState === 'open';q('[popovertarget="'+menu.id+'"]').setAttribute('aria-expanded',String(open));
     if (open) (menu.querySelector('[aria-selected=true]') || menu.querySelector('[data-option]')).focus({preventScroll:true});
   },true);
-  q('#new-chat').addEventListener('click', () => { fresh = true; draft.set('prompt',''); draft.set('references',''); });
+  q('#new-chat').addEventListener('click', () => { fresh = true; draft.set('prompt',''); draft.set('references',''); draft.set('goal_objective',''); });
   q('#motion-toggle').onclick = () => {
     const paused = document.documentElement.classList.toggle('motion-off');
     q('#motion-toggle').textContent = paused ? '◌ 动效暂停' : '◌ 动效开启';

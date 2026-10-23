@@ -206,6 +206,13 @@ class Store:
             if busy:
                 raise WorkerError("WORKER_BUSY_FINISH_OR_ANSWER_CURRENT_TURN", 409)
             row = db.execute("SELECT * FROM sessions WHERE id=?", (session,)).fetchone()
+            if row is not None and work_mode=='goal':
+                goal_path=safe_path(self.runtime/'goals'/session/'state.json')
+                if goal_path.exists():
+                    if goal_path.stat().st_size>32768:raise WorkerError('GOAL_STATE_NEEDS_RECONCILIATION')
+                    goal=json.loads(goal_path.read_text(encoding='utf-8'))
+                    if goal.get('objective')!=objective:raise WorkerError('GOAL_OBJECTIVE_CHANGED_USE_NEW_CONVERSATION')
+                    if goal.get('status')=='complete':raise WorkerError('GOAL_ALREADY_COMPLETE_USE_NEW_CONVERSATION')
             if row is None:
                 if request["session"] is not None:
                     raise WorkerError("UNKNOWN_WORKER_SESSION", 404)

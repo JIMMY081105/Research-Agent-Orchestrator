@@ -28,6 +28,8 @@ def packet(turn, source_sha, snapshot, previous=None):
                  task=turn['id'], attempt=turn.get('reworks', 0), source_sha256=source_sha,
                  final_response=turn['response'], workspace=snapshot, changes=changes,
                  execution_settings={k:turn.get(k) for k in ('work_mode','service_tier','goal_objective','goal_state')},
+                 host_contract={'handoff':'Final response or user-authorized artifact only. No extra handoff file under a restricted deliverable contract.',
+                                'archive':'Host appends the required archive summary after review, outside task workspace. Do not require a workspace archive-body file or certify an unprovided external receipt.'},
                  previous_review=previous.get('review') if previous else None,
                  previous_binding=previous.get('binding_sha256') if previous else None,
                  external_evidence_verified=False)

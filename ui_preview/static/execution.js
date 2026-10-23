@@ -1,4 +1,11 @@
 /* Actual queued turns; HTMX polling only reads state and never invokes a model. */
+function syncGoalSettings(){
+  const source=document.querySelector('#next-worker-goal-objective'),field=document.querySelector('#prompt-form [name=goal_objective]');
+  if(!source||!field)return;
+  field.value=source.value;field.readOnly=true;field.dispatchEvent(new Event('input',{bubbles:true}));
+  const state=document.querySelector('#next-worker-goal-state')?.value,mode=document.querySelector('#prompt-form [name=mode]');
+  if(state==='complete'&&mode?.value==='Goal'){mode.value='Task';mode.dispatchEvent(new Event('change',{bubbles:true}));}
+}
 function syncAnalysisPermission(){
   const analysis=document.querySelector('[name=channel]')?.value==='analysis';
   const delivery=document.querySelector('[name=publish_result]');
@@ -39,6 +46,7 @@ document.addEventListener('htmx:sendError',event=>{
   }
 });
 document.addEventListener('htmx:afterSwap',()=>{
+  syncGoalSettings();
   syncAnalysisPermission();
   const session=document.querySelector('#next-worker-session')?.value;
   const input=document.querySelector('#prompt-form [name=session]');

@@ -82,6 +82,34 @@ class ExecutionUITests(unittest.TestCase):
             with patch('execution.status',return_value={'goal':{'status':'paused'},'turns':[{'state':state,'reworks':reworks}]}),patch('execution.store') as backend:
                 response=self.client.post('/execution/goal/resume',data={'session':'owned','csrf':'nonce'},headers={'Origin':'http://localhost'})
                 self.assertEqual(response.status_code,409);backend.return_value.submit.assert_not_called()
+
+    def test_goal_followup_keeps_original_objective_and_completed_goal_returns_to_task(self):
+        with self.client.session_transaction() as s:s['owned_worker_sessions']=['owned'];s['worker_session']='owned'
+        value={'turns':[{'id':'turn','mode':'full','effort':'xhigh','work_mode':'goal','service_tier':'priority'}],'sessions':[{'id':'owned','model':'gpt-6.1-sol'}],'goal':{'objective':'Original goal & evidence','status':'paused'}}
+        with patch('execution.status',return_value=value):
+            page=self.client.get('/view/prompt').get_data(as_text=True)
+            self.assertIn('value="Original goal &amp; evidence" readonly',page)
+            value['goal']['status']='complete';page=self.client.get('/view/prompt').get_data(as_text=True)
+            self.assertIn('name="mode" value="Task"',page)
+
+    def test_real_adapter_and_store_accept_task_followup_without_resetting_completed_goal(self):
+        import tempfile,uuid,json,execution
+        from pathlib import Path
+        from researchops.worker_store import Store,save
+        with tempfile.TemporaryDirectory() as directory:
+            store=Store(Path(directory),initialize=True);first=str(uuid.uuid4())
+            capability={'enabled':True,'models':['test'],'default_model':'test','skills':[],'work_modes':['task','goal']}
+            with patch.object(store,'capability',return_value=capability):
+                store.submit({'id':first,'session':None,'prompt':'Original goal','mode':'full','effort':'high','skills':[],'model':'test','work_mode':'goal','goal_objective':'Original goal'})
+                store.update(first,state='REVIEW_PASS');path=store.runtime/'goals'/first/'state.json'
+                save(path,{'objective':'Original goal','status':'complete','tokensUsed':900});before=path.read_bytes()
+                following=str(uuid.uuid4())
+                with patch('execution.store',return_value=store):
+                    result=execution.submit({'request_id':following,'session':first,'prompt':'Return ready','permission':'Full Access','effort':'High','speed':'Standard','mode':'Task','model':'test','goal_objective':'Original goal'})
+                self.assertEqual(result['state'],'QUEUED')
+                request=json.loads((store.runtime/'turns'/following/'request.json').read_text(encoding='utf-8'))
+                self.assertEqual(request['work_mode'],'task');self.assertEqual(request['goal_objective'],'')
+                self.assertEqual(path.read_bytes(),before);self.assertEqual(len(store.status(first)['turns']),2)
     def test_unavailable_publisher_blocks_optin_before_queue_admission(self):
         import execution
         form={'prompt':'produce report','publish_result':'yes','permission':'Full Access','effort':'High','speed':'Standard','mode':'Task'}

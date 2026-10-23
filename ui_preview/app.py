@@ -100,19 +100,22 @@ def create_app(testing=False):
         # nonce. Rotate only after an accepted submission, retaining retry IDs.
         selected_session,request_id=browser_state()
         current_settings={}
+        current_goal=None
         current_model=None
         if request.endpoint in ('index','view') and selected_session:
             try:
                 value=execution.status(selected_session)
+                current_goal=value.get('goal')
                 if value['turns']:
                     turn=value['turns'][0]
                     current_settings={'permission':'Full Access' if turn['mode']=='full' else 'Approval needed',
                         'effort':{'low':'Low','medium':'Medium','high':'High','xhigh':'Extra high','max':'Max'}.get(turn['effort'],'Extra high'),
                         'speed':'Fast' if turn.get('service_tier')=='priority' else 'Standard','mode':turn.get('work_mode','task').capitalize()}
+                    if current_goal and current_goal.get('status')=='complete':current_settings['mode']='Task'
                     current_model=next((s['model'] for s in value.get('sessions',[]) if s['id']==selected_session),None)
             except (OSError,ValueError,KeyError):pass
         return dict(options=selected,connected=connected,worker=live,delivery=execution.delivery_capability(),ui_revision=ROOT.parent.parent.name if ROOT.parent.name=='source' else 'development',
-                    default_model=current_model or (('gpt-6.1-sol' if 'gpt-6.1-sol' in live.get('models',[]) else live.get('default_model')) if connected else 'GPT-6.1 Sol'),current_settings=current_settings,
+                    default_model=current_model or (('gpt-6.1-sol' if 'gpt-6.1-sol' in live.get('models',[]) else live.get('default_model')) if connected else 'GPT-6.1 Sol'),current_settings=current_settings,current_goal=current_goal,
                     request_id=request_id,current_session=selected_session or '',csrf=session['csrf'])
 
     def owned(ident):

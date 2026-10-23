@@ -8,6 +8,8 @@ import queue
 import threading
 import time
 import uuid
+import subprocess
+import re
 
 from .dashboard_bundle import safe_path, read_small_json
 from . import winproc
@@ -21,19 +23,48 @@ Your current owned workspace is the writable task directory. Code writes are lim
 Read C:\\Users\\User\\.claude\\INFRA.md before server/SSH work. Do not expose credentials, read auth/token files, change global authentication/billing, stop or restart old jobs, or infer dead processes from timeouts. Check existing job/process/checkpoint identities before scheduling new research work.
 Do not invoke Codex, Claude, other AI agents or API endpoints recursively. An independent Claude review is performed by the host after this turn. Do not claim that you already passed that review. Do not push, create GitHub content, merge, start GPU work, or change VPN/scheduled tasks merely because Full Access is selected; task authorization still applies.
 Keep final reports honest. State actual artifacts, checks and remaining gaps. Never publish hidden reasoning or credentials. Keep generated state out of Git.
-Prepare a concise reviewer handoff in the owned workspace: exact changes, necessary source/contracts, actual checks, fixed input/content hashes and unresolved issues. Do not copy an unrelated whole repository or raw model logs. External results without supplied evidence stay unverified.
+Prepare a concise reviewer handoff in your final response, or in a workspace file only when the user's deliverable contract allows it. Never add an unsolicited handoff file when the user restricts artifacts. Include exact changes, necessary contracts, checks and unresolved issues; external results without supplied evidence stay unverified.
 When the user requests host-managed GitHub result delivery, create REPORT.md and the optional literal artifact catalog in this workspace. The host owns that publication stage; do not invoke GitHub write tools or publish the package yourself.
-After substantive actions append a factual summary through the existing F:\\Personal Data\\_archive_system\\ai_archive.py annotate tool as required by the user's standing archive rules; use platform OpenAI Codex. Do not alter existing archives.
+The host appends the required factual interaction archive summary after this attempt's review, outside your task workspace. Do not create an archive-body artifact or duplicate that host action. Do not claim an archive was verified before a host receipt is provided.
+For a host-managed Goal, native status stays paused to prevent a second native automatic dispatcher. This explicit task turn authorizes one stage of work despite that coordination pause. Keep the original objective; report progress, or mark the existing goal complete only when its full objective is verified. Never create a replacement goal or resume it yourself. The host alone dispatches the next stage after review.
 """
 
 
+def archive_attempt(runtime, store, turn, result, source_sha):
+    """Fixed host action, no model, no shell, no timeout killing shared locks."""
+    folder=safe_path(store.runtime/'turns'/turn['id']/'attempts'/str(turn.get('reworks',0)))
+    receipt=safe_path(folder/'host-archive.json')
+    record={'owner':'BGV.Worker.Archive.v1','status':'UNVERIFIED','task':turn['id'],'attempt':turn.get('reworks',0),'source_sha256':source_sha,'input_hash':turn.get('input_hash'),'binding_sha256':result.get('binding_sha256'),'at':utc()}
+    if receipt.exists():
+        try:
+            previous=read_small_json(receipt)
+            if all(previous.get(k)==record.get(k) for k in ('owner','task','attempt','source_sha256','input_hash','binding_sha256')):return previous
+        except (OSError,ValueError):pass
+        return {**record,'reason':'EXISTING_ARCHIVE_REQUIRES_RECONCILIATION'} # preserve; no uncertain append replay
+    try:
+        folder.mkdir(parents=True,exist_ok=True)
+        body=safe_path(folder/'host-archive-summary.md')
+        body.write_text('**ACTUAL EXECUTION**\n- Local Scene Control task '+turn['id']+' / session '+turn['session']+' / attempt '+str(turn.get('reworks',0))+'.\n- Request: '+clean(turn['prompt'].splitlines()[0],200)+'\n- Native turn: '+str(turn.get('native_turn'))+'; independent review: '+str(result.get('verdict'))+'; fixed binding: '+str(result.get('binding_sha256'))+'.\n- Evidence: '+str(store.runtime/'turns'/turn['id'])+'; workspace: '+str(turn['workspace'])+'. Local workspace review only; no scientific acceptance inferred.\n- Status: '+('SUCCESS' if result.get('verdict')=='PASS' else 'PARTIAL')+'.\n',encoding='utf-8')
+        record['status']='APPENDING';save(receipt,record)
+        value=subprocess.run([r'C:\Python312\python.exe',r'F:\Personal Data\_archive_system\ai_archive.py','annotate','--platform','OpenAI Codex','--title','Scene Control task stage','--body-file',str(body)],capture_output=True,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
+        text=value.stdout.decode('utf-8',errors='replace');match=re.search(r'appended (an:[0-9a-f]+).*\(verified\)',text)
+        record.update(status='VERIFIED' if value.returncode==0 and match else 'UNVERIFIED',exit_code=value.returncode,annotation_id=match.group(1) if match else None,completed_at=utc())
+        save(receipt,record)
+    except (OSError,ValueError):
+        record['status']='UNVERIFIED'
+        try:save(receipt,record)
+        except OSError:pass
+    return record
+
+
 class Service:
-    def __init__(self, runtime, source_sha, trigger="scheduled-worker", rpc_factory=Rpc, reviewer=review_turn):
+    def __init__(self, runtime, source_sha, trigger="scheduled-worker", rpc_factory=Rpc, reviewer=review_turn, archiver=archive_attempt):
         self.runtime = safe_path(runtime)
         self.store = Store(runtime, initialize=True)
         self.source_sha = source_sha
         self.trigger = trigger
         self.rpc_factory, self.reviewer = rpc_factory, reviewer
+        self.archiver=archiver
         self.rpc = None
         self.skills = []
         self.models = []
@@ -153,6 +184,13 @@ class Service:
         if turn.get('kind')=='analysis' or turn.get('work_mode')=='plan':
             requested={'approvalPolicy':'untrusted','sandboxPolicy':{'type':'readOnly'}}
         if turn["thread"]:
+            # A cold resume of an active native Goal can itself launch a model
+            # turn. Fence that dispatcher BEFORE resume, including Task replies
+            # in an existing Goal session. This is our owned thread only.
+            if 'goal' in self.work_modes or turn.get('work_mode')=='goal':
+                prior_goal=self.rpc.call('thread/goal/get',{'threadId':turn['thread']}).get('goal')
+                if prior_goal and prior_goal['status']=='active':
+                    self.rpc.call('thread/goal/set',{'threadId':turn['thread'],'status':'paused','origin':'automatic'})
             response = self.rpc.call("thread/resume", {"threadId": turn["thread"], "excludeTurns": True,
                                                       "cwd": str(workspace), "modelProvider": "openai",
                                                       'model': turn['model'], 'developerInstructions': RULES})
@@ -173,11 +211,12 @@ class Service:
             raise WorkerError('NATIVE_OWNED_SESSION_MODEL_MISMATCH')
         if turn.get('work_mode')=='goal':
             current=self.rpc.call('thread/goal/get',{'threadId':turn['thread']}).get('goal')
-            params={'threadId':turn['thread'],'status':'active','origin':'user'}
+            params={'threadId':turn['thread'],'status':'paused','origin':'automatic' if current else 'user'}
             if current:
                 if current['objective']!=turn['goal_objective'] or (current['status']=='complete' and not turn.get('reworks')):raise WorkerError('EXISTING_GOAL_REQUIRES_NEW_CONVERSATION')
             else:params['objective']=turn['goal_objective']
             goal=current if current and current['status']=='complete' else self.rpc.call('thread/goal/set',params)['goal']
+            if goal['status']!='complete':goal={**goal,'was_active':True,'host_wait':'HOST_MANAGED_EXECUTION'}
             save(self.store.runtime/'goals'/turn['session']/'state.json',goal)
         self.store.event(turn["session"], turn["id"], "INSTRUCTIONS", json.dumps({"sources": response.get("instructionSources", []), "mode": turn["mode"], "workspace": str(workspace)}, ensure_ascii=False))
         selected = {s["id"]: s for s in self.skills}
@@ -348,6 +387,8 @@ class Service:
                     # next turn. Do not let an active goal bypass that boundary.
                     goal=self.rpc.call('thread/goal/set',{'threadId':turn['thread'],'status':'paused','origin':'automatic'})['goal']
                     goal={**goal,'host_wait':'CLAUDE_REVIEW','was_active':True}
+                elif goal and goal['status']=='paused':
+                    goal={**goal,'host_wait':'CLAUDE_REVIEW','was_active':True}
                 if goal:save(self.store.runtime/'goals'/turn['session']/'state.json',goal)
             if state != "completed":
                 # Persist fixed categories only, never raw provider responses.
@@ -377,6 +418,7 @@ class Service:
             try:
                 turn['goal_state']=goal
                 result = self.reviewer(self.runtime, self.store, turn, self.source_sha)
+                archive=self.archiver(self.runtime,self.store,turn,result,self.source_sha)
                 if result['verdict'] == 'REWORK' and result.get('issues') and turn.get('reworks', 0) < 2:
                     number = turn.get('reworks', 0)+1
                     save(self.store.runtime / 'turns' / turn['id'] / ('repair-'+str(number)+'.json'),
@@ -389,6 +431,7 @@ class Service:
                                       reason=None if result["verdict"] == "PASS" else "REWORK_LIMIT_OR_MISSING_FINDINGS")
                     if result['verdict']=='PASS' and goal and goal.get('was_active'):
                         wait=('USER_PAUSED' if (self.store.runtime/'goals'/turn['session']/'pause-request.json').exists()
+                              else 'ARCHIVE_UNVERIFIED' if archive.get('status')!='VERIFIED'
                               else 'NO_ACTION_CONTINUATION_SUPPRESSED' if not turn.get('tool_items')
                               else 'ADMISSION_PAUSED' if not self.store.capability().get('enabled') else None)
                         if wait:
@@ -409,6 +452,7 @@ class Service:
                                      {**goal,'host_wait':'DISPATCH_PAUSED_'+error.code})
             except (WorkerError, OSError, ValueError) as error:
                 self.store.update(turn["id"], state="PAUSED_REVIEW", reason=str(error) if isinstance(error, WorkerError) else "REVIEW_UNVERIFIED")
+                self.archiver(self.runtime,self.store,turn,{'verdict':'PAUSED'},self.source_sha)
             finally:
                 with self.store.db() as db:
                     db.execute("UPDATE approvals SET state='EXPIRED',updated=? WHERE turn=? AND state IN ('PENDING','ANSWERED')", (utc(), turn["id"]))

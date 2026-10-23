@@ -8,12 +8,29 @@ import unittest
 import uuid
 from contextlib import nullcontext
 from unittest.mock import Mock, patch
-from researchops.worker_service import Service
+from researchops.worker_service import Service,archive_attempt
 from researchops.worker_store import OWNER, WorkerError, save, utc
 from researchops import winproc
 
 
 class WorkerServiceTests(unittest.TestCase):
+    def test_host_archive_has_no_killing_timeout_and_does_not_add_workspace_artifacts(self):
+        turn=self.turn();folder=Path(turn['workspace']);self.assertFalse(folder.exists())
+        with patch('researchops.worker_service.subprocess.run',return_value=Mock(returncode=0,stdout=b'appended an:abcdef0123456789 to2026-10.md (verified)')) as invoke:
+            first=archive_attempt(self.root,self.store,turn,{'verdict':'PASS','binding_sha256':'binding'},'source')
+            second=archive_attempt(self.root,self.store,turn,{'verdict':'PASS','binding_sha256':'binding'},'source')
+        self.assertEqual(first['status'],'VERIFIED');self.assertEqual(first,second);invoke.assert_called_once()
+        self.assertNotIn('timeout',invoke.call_args.kwargs);self.assertNotIn('shell',invoke.call_args.kwargs)
+        self.assertEqual(invoke.call_args.args[0][1],r'F:\Personal Data\_archive_system\ai_archive.py')
+        self.assertFalse(folder.exists())
+
+    def test_archive_exit_zero_without_receipt_is_not_verified_or_retried(self):
+        turn=self.turn()
+        with patch('researchops.worker_service.subprocess.run',return_value=Mock(returncode=0,stdout=b'completed')) as invoke:
+            value=archive_attempt(self.root,self.store,turn,{'verdict':'PASS'},'source')
+            again=archive_attempt(self.root,self.store,turn,{'verdict':'PASS'},'source')
+        self.assertEqual(value['status'],'UNVERIFIED');self.assertEqual(again,value);invoke.assert_called_once()
+
     def test_actual_windows_status_read_lock_cannot_stop_owned_worker(self):
         import ctypes as C
         from ctypes import wintypes as W
@@ -40,7 +57,7 @@ class WorkerServiceTests(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory(); self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
         self.review = Mock(return_value={'verdict': 'PASS'})
-        self.service = Service(self.root, 'a' * 64, reviewer=self.review)
+        self.service = Service(self.root, 'a' * 64, reviewer=self.review,archiver=Mock(return_value={'status':'VERIFIED'}))
         self.service.rpc = Mock()
         self.store = self.service.store
         self.cap = patch.object(self.store, 'capability', return_value={'enabled': True, 'skills': [], 'default_model': 'test'})
@@ -84,31 +101,51 @@ class WorkerServiceTests(unittest.TestCase):
     def test_goal_uses_persisted_native_contract_without_resetting_budget(self):
         turn=self.turn('full');turn.update(work_mode='goal',goal_objective='Keep exact accounting',service_tier='priority')
         current={'objective':'Keep exact accounting','status':'paused','tokensUsed':900,'tokenBudget':1000}
-        self.service.rpc.call.side_effect=[{'thread':{'id':'owned'},'model':turn['model'],'approvalPolicy':'never','sandbox':{'type':'dangerFullAccess'}},{'goal':current},{'goal':{**current,'status':'active'}},{'turn':{'id':'native'}}]
+        self.service.rpc.call.side_effect=[{'thread':{'id':'owned'},'model':turn['model'],'approvalPolicy':'never','sandbox':{'type':'dangerFullAccess'}},{'goal':current},{'goal':current},{'turn':{'id':'native'}}]
         with patch('researchops.worker_service.charge',return_value='call'):self.service.begin(turn)
         params=self.service.rpc.call.call_args_list[2].args[1]
         self.assertNotIn('objective',params);self.assertNotIn('tokenBudget',params)
+        self.assertEqual(params['status'],'paused')
         turn['tool_items']=set()
-        self.service.rpc.call.side_effect=[{'goal':{**current,'status':'active'}},{'goal':current}]
+        self.service.rpc.call.side_effect=[{'goal':current}]
         self.service.handle({'method':'turn/completed','params':{'threadId':'owned','turn':{'id':'native','status':'completed'}}})
         self.assertEqual(len(self.store.status()['turns']),1)
         state=json.loads((self.store.runtime/'goals'/turn['session']/'state.json').read_text())
         self.assertEqual(state['tokensUsed'],900);self.assertEqual(state['host_wait'],'NO_ACTION_CONTINUATION_SUPPRESSED')
 
+    def test_cold_resume_fences_active_native_goal_before_any_resume_or_model_call(self):
+        turn=self.turn();self.begin(turn);self.store.update(turn['id'],state='REVIEW_PASS')
+        following=self.turn('approval',turn['session']);self.service.work_modes=['task','goal']
+        calls=[]
+        def rpc(method,params):
+            calls.append((method,params))
+            if method=='thread/goal/get':return {'goal':{'objective':'original','status':'active','tokensUsed':77}}
+            if method=='thread/goal/set':
+                self.assertEqual(params,{'threadId':'owned','status':'paused','origin':'automatic'});return {'goal':{'status':'paused'}}
+            if method=='thread/resume':
+                self.assertEqual([x[0] for x in calls],['thread/goal/get','thread/goal/set','thread/resume'])
+                return {'thread':{'id':'owned'},'model':following['model']}
+            if method=='turn/start':return {'turn':{'id':'next'}}
+            raise AssertionError(method)
+        self.service.rpc.call.side_effect=rpc
+        with patch('researchops.worker_service.charge',return_value='call'):self.service.begin(following)
+        self.assertEqual(calls[-1][0],'turn/start');self.assertFalse(any(p.get('status')=='active' for m,p in calls))
+
     def test_productive_goal_continues_only_after_review_and_pause_suppresses_next_dispatch(self):
         self.store.capability.return_value.update(work_modes=['task','goal'])
-        for paused in (False,True,'admission','busy'):
+        for paused in (False,True,'admission','busy','archive'):
             with self.subTest(paused=paused):
                 self.store.capability.return_value['enabled']=True
+                self.service.archiver.return_value={'status':'UNVERIFIED' if paused=='archive' else 'VERIFIED'}
                 request={'id':str(uuid.uuid4()),'session':None,'prompt':'Bounded goal stage','mode':'full','effort':'high','skills':[],'work_mode':'goal','goal_objective':'Original objective'}
                 self.store.submit(request);turn=self.service.next_turn()
-                goal={'objective':'Original objective','status':'active','tokensUsed':100}
+                goal={'objective':'Original objective','status':'paused','tokensUsed':100}
                 self.service.rpc.call.side_effect=[{'thread':{'id':'owned'},'model':'test','approvalPolicy':'never','sandbox':{'type':'dangerFullAccess'}},{'goal':None},{'goal':goal},{'turn':{'id':'native'}}]
                 with patch('researchops.worker_service.charge',return_value='call'):self.service.begin(turn)
                 turn['tool_items']={'actual-command'}
                 if paused is True:save(self.store.runtime/'goals'/turn['session']/'pause-request.json',{'owner':OWNER})
                 if paused=='admission':self.store.capability.return_value['enabled']=False
-                self.service.rpc.call.side_effect=[{'goal':goal},{'goal':{**goal,'status':'paused'}}]
+                self.service.rpc.call.side_effect=[{'goal':goal}]
                 def review(*args):
                     self.assertEqual(self.store.status(turn['session'])['goal']['status'],'paused')
                     self.assertIsNone(self.service.next_turn());return {'verdict':'PASS'}
@@ -119,7 +156,7 @@ class WorkerServiceTests(unittest.TestCase):
                 if paused:
                     self.assertIsNone(next_turn)
                     self.assertEqual(self.store.status(turn['session'])['turns'][0]['state'],'REVIEW_PASS')
-                    self.assertEqual(self.store.status(turn['session'])['goal']['host_wait'],'ADMISSION_PAUSED' if paused=='admission' else 'DISPATCH_PAUSED_WORKER_BUSY_FINISH_OR_ANSWER_CURRENT_TURN' if paused=='busy' else 'USER_PAUSED')
+                    self.assertEqual(self.store.status(turn['session'])['goal']['host_wait'],'ADMISSION_PAUSED' if paused=='admission' else 'DISPATCH_PAUSED_WORKER_BUSY_FINISH_OR_ANSWER_CURRENT_TURN' if paused=='busy' else 'ARCHIVE_UNVERIFIED' if paused=='archive' else 'USER_PAUSED')
                 else:
                     self.assertEqual(next_turn['session'],turn['session']);self.assertEqual(next_turn['goal_objective'],'Original objective');self.assertEqual(next_turn['work_mode'],'goal')
                     self.store.update(next_turn['id'],state='CANCELLED')
