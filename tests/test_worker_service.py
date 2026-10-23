@@ -62,6 +62,35 @@ class WorkerServiceTests(unittest.TestCase):
         self.service.answer(); self.service.answer()
         self.service.rpc.respond.assert_called_once_with(91, {'decision': 'decline'})
 
+    def test_parallel_approvals_stay_answerable_until_all_are_resolved(self):
+        turn = self.turn(); self.begin(turn)
+        for rpc_id in (91, 92):
+            self.service.handle({'id':rpc_id,'method':'item/commandExecution/requestApproval',
+                'params':{'threadId':'owned','turnId':'native','command':'read own files'}})
+        approvals=self.store.status()['approvals']
+        self.store.decide({'id':approvals[0]['id'],'turn':turn['id'],'decision':'accept'})
+        self.service.answer()
+        self.assertEqual(self.store.status()['turns'][0]['state'],'WAITING_APPROVAL')
+        self.assertEqual(len(self.store.status()['approvals']),1)
+        self.store.decide({'id':approvals[1]['id'],'turn':turn['id'],'decision':'decline'})
+        self.service.answer();self.service.answer()
+        self.assertEqual(self.store.status()['turns'][0]['state'],'RUNNING')
+        self.assertEqual(self.service.rpc.respond.call_count,2)
+
+    def test_parallel_user_question_stays_waiting_after_command_reply(self):
+        turn=self.turn();self.begin(turn)
+        self.service.handle({'id':91,'method':'item/commandExecution/requestApproval',
+            'params':{'threadId':'owned','turnId':'native','command':'read own files'}})
+        self.service.handle({'id':92,'method':'item/tool/requestUserInput',
+            'params':{'threadId':'owned','turnId':'native','questions':[{'id':'scope','question':'Which scope?'}]}})
+        command=next(a for a in self.store.status()['approvals'] if a['method']=='item/commandExecution/requestApproval')
+        self.store.decide({'id':command['id'],'turn':turn['id'],'decision':'accept'})
+        self.service.answer()
+        self.assertEqual(self.store.status()['turns'][0]['state'],'WAITING_INPUT')
+        question=self.store.status()['approvals'][0]
+        with self.assertRaisesRegex(WorkerError,'USER_INPUT_REQUIRES_TEXT_REPLY'):
+            self.store.decide({'id':question['id'],'turn':turn['id'],'decision':'accept'})
+
     def test_foreign_events_cannot_complete_or_request_owned_approval(self):
         turn = self.turn(); self.begin(turn)
         self.service.handle({'method': 'turn/completed', 'params': {'threadId': 'foreign', 'turn': {'id': 'native', 'status': 'completed'}}})

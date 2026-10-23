@@ -193,7 +193,15 @@ class Service:
             self.rpc.respond(json.loads(row["rpc_id"]), result)
             with self.store.db() as db:
                 db.execute("UPDATE approvals SET state='SENT',updated=? WHERE id=?", (utc(), row["id"]))
-            self.store.update(turn["id"], state="RUNNING")
+            # Native tools can ask for several approvals concurrently. Sending
+            # one reply must not hide another request or make decide() reject it.
+            with self.store.db(True) as db:
+                pending = [r[0] for r in db.execute(
+                    "SELECT method FROM approvals WHERE turn=? AND state IN ('PENDING','ANSWERED','SENDING')",
+                    (turn["id"],))]
+            state = ("WAITING_INPUT" if "item/tool/requestUserInput" in pending
+                     else "WAITING_APPROVAL" if pending else "RUNNING")
+            self.store.update(turn["id"], state=state)
 
     def handle(self, value):
         turn = self.active_turn
