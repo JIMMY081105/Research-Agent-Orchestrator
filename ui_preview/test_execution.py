@@ -1,0 +1,150 @@
+"""The UI must submit exactly one bound turn, escape output and reject forged actions."""
+import unittest
+from unittest.mock import patch
+import app
+
+
+class ExecutionUITests(unittest.TestCase):
+    def setUp(self):self.client=app.create_app(testing=True).test_client()
+    def test_publisher_identity_dependency_failure_disables_only_delivery(self):
+        import execution,json,tempfile,hashlib,datetime as dt
+        from pathlib import Path
+        import builtins
+        real_import=builtins.__import__
+        with tempfile.TemporaryDirectory() as directory:
+            rt=Path(directory);files={n:hashlib.sha256(b'').hexdigest() for n in ('delivery_agent.py','researchops/__init__.py','researchops/delivery_agent.py','tests/test_delivery_agent.py','tools/delivery.ps1','DELIVERY.md')}
+            digest=hashlib.sha256(json.dumps(files,ensure_ascii=False,sort_keys=True,separators=(',',':')).encode()).hexdigest()
+            home=rt/'worker-delivery';source=home/'snapshots'/digest/'source'
+            for name in files:
+                p=source/name;p.parent.mkdir(parents=True,exist_ok=True);p.write_bytes(b'')
+            (source.parent/'manifest.json').write_text(json.dumps({'files':files}))
+            (home/'activation.json').write_text(json.dumps({'owner':'BGV.Worker.ResultDelivery.v1','source':str(source),'sha256':digest}))
+            (home/'service.json').write_text('{}')
+            def failed_import(name,*args,**kwargs):
+                if name=='researchops.dashboard_state':raise ImportError('missing identity dependency')
+                return real_import(name,*args,**kwargs)
+            with patch.object(execution,'RUNTIME',rt),patch('builtins.__import__',side_effect=failed_import):
+                self.assertEqual(execution.delivery_capability(),{'enabled':False})
+    def test_unavailable_publisher_blocks_optin_before_queue_admission(self):
+        import execution
+        form={'prompt':'produce report','publish_result':'yes','permission':'Full Access','effort':'High','speed':'Standard','mode':'Task'}
+        with patch('execution.delivery_capability',return_value={'enabled':False}),patch('execution.store') as backend:
+            with self.assertRaisesRegex(ValueError,'DELIVERY_SERVICE_NOT_READY'):execution.submit(form)
+            backend.assert_not_called()
+    def test_selected_skills_and_optin_use_fixed_publisher_command(self):
+        import execution
+        from pathlib import Path
+        from werkzeug.datastructures import MultiDict
+        form=MultiDict([('prompt','produce report'),('request_id','id'),('publish_result','yes'),('permission','Full Access'),('effort','High'),('speed','Standard'),('mode','Task'),('skills','chosen1'),('skills','chosen2')])
+        with patch('execution.delivery_capability',return_value={'enabled':True,'source':Path('C:/fixed/publisher')}),patch('execution.store') as backend,patch('execution.subprocess.run') as invoke:
+            backend.return_value.submit.return_value={'id':'task-id','session':'session-id'};invoke.return_value.returncode=0
+            result=execution.submit(form)
+        request=backend.return_value.submit.call_args.args[0]
+        self.assertEqual(request['skills'],['chosen1','chosen2']);self.assertIn('REPORT.md',request['prompt'])
+        self.assertEqual(result['delivery'],'ENROLLED');self.assertEqual(invoke.call_args.args[0][-3:],['--task','task-id','--authorize-draft'])
+        self.assertNotIn('shell',invoke.call_args.kwargs)
+    def test_analysis_does_not_enroll_or_require_publisher(self):
+        import execution
+        form={'prompt':'analyze','channel':'analysis','publish_result':'yes','permission':'Full Access','effort':'High','speed':'Standard','mode':'Task'}
+        with patch('execution.delivery_capability') as cap,patch('execution.store') as backend,patch('execution.subprocess.run') as invoke:
+            backend.return_value.submit.return_value={'id':'id','session':'session'};execution.submit(form)
+        cap.assert_not_called();invoke.assert_not_called()
+        request=backend.return_value.submit.call_args.args[0];self.assertEqual(request['kind'],'analysis');self.assertEqual(request['mode'],'approval')
+    def test_delivery_link_and_late_writer_exit_keep_real_polling(self):
+        with self.client.session_transaction() as s:s['owned_worker_sessions']=['owned']
+        status={'turns':[{'id':'x','prompt':'task','state':'WAITING_TOOL_EXIT','response':'','reworks':0}], 'events':[],'approvals':[],'review_summary':None,'delivery':{'state':'PUBLISHING'}}
+        with patch('execution.status',return_value=status):
+            html=self.client.get('/execution/status/owned').get_data(as_text=True)
+        self.assertIn('hx-trigger="every 2s"',html);self.assertIn('PUBLISHING',html)
+    def test_execute_requires_nonce_even_for_local_origin(self):
+        self.assertEqual(self.client.post('/execute',data={'prompt':'hello'},headers={'Origin':'http://localhost'}).status_code,403)
+    def test_unavailable_worker_keeps_submit_disabled(self):
+        with patch('execution.capability',return_value={'enabled':False}):
+            page=self.client.get('/').get_data(as_text=True)
+        self.assertIn('提交真实任务" disabled',page)
+    def test_external_mutation_origin_rejected(self):
+        for path in ['/execute','/execution/decision','/execution/cancel']:
+            self.assertEqual(self.client.post(path,headers={'Origin':'https://outside.invalid'}).status_code,403)
+    def test_submit_uses_server_session_and_escapes_response(self):
+        with self.client.session_transaction() as s:s['csrf']='test-nonce';s['request_ids']=['test-id']
+        status={'turns':[{'id':'x','prompt':'<script>','state':'REVIEW_PASS','reason':None,'response':'<img src=x>','reworks':0}], 'events':[],'approvals':[],'review_summary':None}
+        with patch('execution.submit',return_value={'id':'x','session':'owned'}),patch('execution.status',return_value=status):
+            result=self.client.post('/execute',data={'csrf':'test-nonce','request_id':'test-id','prompt':'hello'},headers={'Origin':'http://localhost'})
+        self.assertEqual(result.status_code,200);self.assertNotIn(b'<img',result.data);self.assertIn(b'&lt;img',result.data)
+        with self.client.session_transaction() as s:self.assertEqual(s['worker_session'],'owned')
+    def test_status_of_unowned_session_is_denied_without_backend_read(self):
+        with patch('execution.status') as status:
+            for path in ['/execution/status/foreign','/execution/progress/foreign']:
+                self.assertEqual(self.client.get(path).status_code,403)
+            status.assert_not_called()
+    def test_forged_request_id_is_not_submitted(self):
+        with self.client.session_transaction() as s:s['csrf']='nonce';s['request_ids']=['owned-id']
+        with patch('execution.submit') as submit:
+            self.assertEqual(self.client.post('/execute',data={'csrf':'nonce','request_id':'foreign'},headers={'Origin':'http://localhost'}).status_code,403)
+            submit.assert_not_called()
+
+    def test_owned_task_restores_after_prompt_progress_navigation_even_if_paused(self):
+        with self.client.session_transaction() as s:
+            s['worker_session']='owned';s['owned_worker_sessions']=['owned']
+        with patch('execution.capability',return_value={'enabled':False}),patch('execution.submit') as submit,patch('execution.store') as store:
+            for path in ('/view/prompt','/?page=prompt'):
+                page=self.client.get(path).get_data(as_text=True)
+                self.assertIn('hx-get="/execution/status/owned"',page)
+                self.assertIn('hx-trigger="load"',page)
+            page=self.client.get('/view/progress').get_data(as_text=True)
+            self.assertIn('hx-get="/execution/progress/owned"',page)
+            submit.assert_not_called();store.assert_not_called()
+
+    def test_restored_approval_is_visible_without_deciding_or_resubmitting(self):
+        with self.client.session_transaction() as s:s['owned_worker_sessions']=['owned']
+        status={'turns':[{'id':'turn','prompt':'test','state':'WAITING_APPROVAL','response':'waiting','reworks':0}],
+                'events':[],'approvals':[{'id':'approval','turn':'turn','method':'item/commandExecution/requestApproval','params':{'command':'read files'}}], 'review_summary':None}
+        with patch('execution.status',return_value=status),patch('execution.capability',return_value={'enabled':False}),patch('execution.store') as store,patch('execution.submit') as submit:
+            page=self.client.get('/execution/status/owned').get_data(as_text=True)
+            self.assertIn('WAITING_APPROVAL',page);self.assertIn('允许这一次',page)
+            self.assertIn('name="id" value="approval"',page)
+            self.assertIn('/execution/decision',page)
+            store.assert_not_called();submit.assert_not_called()
+
+    def test_new_chat_does_not_restore_or_cancel_previous_task(self):
+        with self.client.session_transaction() as s:
+            s['worker_session']='owned';s['owned_worker_sessions']=['owned']
+        with patch('execution.capability',return_value={'enabled':False}),patch('execution.store') as store:
+            page=self.client.get('/view/prompt?new=1').get_data(as_text=True)
+            self.assertNotIn('/execution/status/owned',page);store.assert_not_called()
+        with self.client.session_transaction() as s:
+            self.assertNotIn('worker_session',s);self.assertIn('owned',s['owned_worker_sessions'])
+
+    def test_progress_keeps_agents_and_stages_without_prompt_or_raw_commands(self):
+        with self.client.session_transaction() as s:s['owned_worker_sessions']=['owned']
+        status={'session':'owned','sessions':[{'id':'owned','model':'actual-model'}],
+                'turns':[{'id':'turn','state':'RUNNING','effort':'high','mode':'full','reworks':0,'reason':None}],
+                'approvals':[],'review_summary':None,'events':[{'kind':'COMMAND','body':'RAW_COMMAND_MUST_STAY_IN_PROMPT'}]}
+        with patch('execution.status',return_value=status),patch('execution.capability',return_value={'enabled':False}):
+            page=self.client.get('/execution/progress/owned').get_data(as_text=True)
+        self.assertEqual(page.count('<video '),2)
+        for value in ('David','Lucy','actual-model','CURRENT STAGE','data-view="progress"','hx-target="this"'):
+            self.assertIn(value,page)
+        for value in ('RAW_COMMAND_MUST_STAY_IN_PROMPT','prompt-form','live-answer'):
+            self.assertNotIn(value,page)
+
+    def test_idle_and_offline_progress_keep_both_avatars_without_fake_activity(self):
+        for enabled in (False,True):
+            cap={'enabled':enabled,'models':['actual-model'],'default_model':'actual-model'}
+            with patch('execution.capability',return_value=cap):page=self.client.get('/view/progress').get_data(as_text=True)
+            self.assertEqual(page.count('<video '),2)
+            self.assertIn('David',page);self.assertIn('Lucy',page)
+            self.assertNotIn('prompt-form',page);self.assertNotIn('SCENE–001',page)
+
+    def test_review_pause_is_shown_on_reviewer_after_executor_completed(self):
+        with self.client.session_transaction() as s:s['owned_worker_sessions']=['owned']
+        status={'session':'owned','sessions':[{'id':'owned','model':'actual-model'}],
+                'turns':[{'id':'turn','state':'PAUSED_REVIEW','effort':'high','mode':'approval','reworks':0,'reason':'CONTEXT_LIMIT'}],
+                'approvals':[],'review_summary':None,'events':[]}
+        with patch('execution.status',return_value=status):
+            page=self.client.get('/execution/progress/owned').get_data(as_text=True)
+        self.assertIn('执行完成 · 等待审核',page);self.assertIn('<h2>审核暂停</h2>',page)
+        self.assertIn('CONTEXT_LIMIT',page);self.assertNotIn('<h2>等待 Codex 交接</h2>',page)
+
+
+if __name__=='__main__':unittest.main()

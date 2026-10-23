@@ -184,13 +184,15 @@ def _pipe(child_reads):
     return (read, write) if child_reads else (write, read)  # (child end, parent end)
 
 
-def _owned_job(memory_mb):
+def _owned_job(memory_mb, process_limit=8):
+    if type(process_limit) is not int or not 1 <= process_limit <= 32:
+        raise ValueError('Invalid owned process limit')
     job = K.CreateJobObjectW(None, None)
     if not job:
         raise C.WinError(C.get_last_error())
     limits = Extended()
     limits.basic.flags = 0x2000 | 0x200 | 0x8  # kill-on-close, job memory, process cap
-    limits.basic.active = 8
+    limits.basic.active = process_limit
     limits.job_memory = memory_mb * 1024 * 1024
     if not K.SetInformationJobObject(job, 9, C.byref(limits), C.sizeof(limits)):
         K.CloseHandle(job)

@@ -1,0 +1,30 @@
+{% set turn=live.turns[0] if live.turns else none %}
+{% set review=live.review_summary %}
+{% set session_info=(live.sessions|selectattr('id','equalto',live.session)|list|first) %}
+{% set state=turn.state if turn else 'IDLE' %}
+{% set execution_complete=state in ['REVIEWING','PAUSED_REVIEW','REVIEW_PASS','NEEDS_REWORK'] %}
+{% set labels={'QUEUED':'已入队','STARTING':'正在连接','RUNNING':'执行中','WAITING_APPROVAL':'等待操作批准','WAITING_INPUT':'等待补充信息','WAITING_TOOL_EXIT':'等待命令实际退出','CANCELLING':'已请求中断，等待确认','REVIEWING':'交给 Claude 审核','REVIEW_PASS':'本阶段通过','NEEDS_REWORK':'需要处理','PAUSED_REVIEW':'审核暂停','PAUSED_MODEL_ERROR':'调用暂停','CANCELLED':'本轮已停止'} %}
+<section class="progress-page live-board" data-view="progress" data-live-progress hx-get="/execution/progress/{{ live.session }}" hx-trigger="every 3s" hx-target="this" hx-swap="outerHTML">
+  <header class="progress-heading"><div><p class="eyebrow">MISSION CONTROL / LIVE</p><h1>任务进度</h1><p>{{ labels.get(state,state) }}{% if turn and turn.reason %} · {{ turn.reason }}{% endif %}</p></div><span class="mission-id">{{ live.session[:8] }}<span>真实任务 · 修复 {{ turn.reworks if turn else 0 }}/2</span></span></header>
+  {% if live.approvals %}<div class="pending-strip" role="status"><span>有 {{ live.approvals|length }} 项请求待处理</span><button type="button" hx-get="/view/prompt" hx-target="#workspace">在 Prompt 查看</button></div>{% endif %}
+  <div class="pipeline">{% for title in ['已登记','Codex 执行','Claude 审核','验证结果'] %}<div class="pipeline-step {{ 'done' if loop.index==1 or state=='REVIEW_PASS' or (loop.index==2 and execution_complete) else 'current' if (loop.index==2 and state in ['RUNNING','STARTING','WAITING_APPROVAL','WAITING_INPUT']) or (loop.index==3 and state in ['REVIEWING','PAUSED_REVIEW']) else '' }}"><span class="step-dot">{{ '%02d'|format(loop.index) }}</span>{{ title }}</div>{% endfor %}</div>
+  <div class="agents">
+    {% for agent,character,name in [('codex','david','David'),('claude','lucy','Lucy')] %}
+    {% set working=(agent=='codex' and state=='RUNNING') or (agent=='claude' and state=='REVIEWING') %}
+    {% set heading=('执行完成 · 等待审核' if execution_complete and state!='REVIEW_PASS' else labels.get(state,state)) if agent=='codex' else '审核暂停' if state=='PAUSED_REVIEW' else '审核中' if state=='REVIEWING' else '审核通过' if review and review.status=='PASS' else '提出修改意见' if review and review.status=='REWORK' else '等待 Codex 交接' %}
+    <article class="agent {{ agent }} {{ 'working' if working else '' }}">
+      <header class="agent-top"><span><i class="agent-dot"></i>{{ agent|capitalize }} · {{ name }}</span><span class="state-pill">{{ 'WORKING' if working else 'WAITING' if state not in ['REVIEW_PASS','NEEDS_REWORK'] else 'DONE' }}</span></header>
+      <div class="agent-hero"><video src="{{ url_for('avatar',name=character+'.mp4') }}" poster="{{ url_for('avatar',name=character+'.jpg') }}" aria-label="{{ name }} 动态头像" autoplay muted loop playsinline preload="auto"></video><div><p class="agent-role">{{ 'EXECUTOR' if agent=='codex' else 'REVIEWER' }}</p><h2>{{ heading }}</h2><p class="muted">{{ '实现 · 检查 · 修复' if agent=='codex' else '独立检查 · 反馈 · 再验证' }}</p></div></div>
+      <dl class="specs"><div><dt>MODEL</dt><dd>{{ session_info.model if agent=='codex' and session_info else review.token_usage.models[0].model if review and review.token_usage and review.token_usage.models else '尚未调用' }}</dd></div><div><dt>EFFORT</dt><dd>{{ turn.effort if agent=='codex' and turn else 'medium' }}</dd></div><div><dt>PERMISSIONS</dt><dd>{{ 'Full Access' if agent=='codex' and turn and turn.mode=='full' else 'Approval needed' if agent=='codex' else 'Tools disabled' }}</dd></div></dl>
+      <div class="stage-heading">CURRENT STAGE<span class="thinking-dot {{ 'lit' if working else '' }}"></span></div>
+      <ol class="stage-log compact-stages">
+        {% if agent=='codex' %}<li class="active"><p>{{ heading }}</p></li><li><p>公开对话、命令记录与审批在 Prompt 中查看。</p></li>
+        {% else %}<li class="active"><p>{{ heading }}</p></li><li><p>{{ turn.reason if state=='PAUSED_REVIEW' and turn.reason else '只有实际收到本轮结果后才会调用审核。' if not review and state!='REVIEWING' else '审核绑定固定产物与内容 hash。' }}</p></li>{% endif %}
+        {% for event in live.events|selectattr('kind','equalto','STATUS')|list|reverse %}{% if loop.index<=2 and agent=='codex' %}<li><time>{{ event.created[11:19] }}</time><p>{{ event.body }}</p></li>{% endif %}{% endfor %}
+      </ol>
+      <footer><span>{{ '本轮修复 '+(turn.reworks|string)+'/2' if agent=='codex' and turn else '审核包 '+(review.packet_bytes|string)+' B' if review else '尚无本轮审核回执' }}</span><button type="button" hx-get="/view/prompt" hx-target="#workspace">查看对话与记录 ↗</button></footer>
+    </article>
+    {% endfor %}
+    <div class="handoff {{ 'transmitting' if state=='REVIEWING' else '' }}" aria-label="Codex 向 Claude 交接"><span></span>→</div>
+  </div>
+</section>

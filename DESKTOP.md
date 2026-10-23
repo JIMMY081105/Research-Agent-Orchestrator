@@ -32,6 +32,15 @@ freshness, not the native app's ability to show its status/error screen.
 
 ## Operations and scope
 
+Independent source audits use the retained cycle and shared 50/UTC-day ledger.
+The historical ten-total authorization can be extended only after explicit
+user consent for one more call. The manual review command validates a
+content-addressed chain of evidence in the private runtime, including original
+cycle hash, parent hash, unchanged accounting policy and current source hash.
+It does not create authorizations. Each rejected/failed/REWORK attempt remains
+charged. Further calls after exhaustion require another explicit grant.
+No temporary Python patch or old approval can authorize the new version.
+
 `tools/desktop.ps1 -Mode Open|Status|Disable|Enable|Uninstall` manages only this
 component. Disable/Enable affect future launches. Uninstall verifies ownership,
 removes only the dedicated service task and matching shortcuts, and retains

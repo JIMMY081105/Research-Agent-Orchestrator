@@ -19,10 +19,15 @@ without changing old tasks, pauses or cycles. Its fixed read-only GPU telemetry
 uses a separate connection without forwarding/reuse and does not change the
 existing 15-minute research observer or reconnect VPN.
 
-Only `E:\Github\Building-Generation-Validation` is an authorized code-writing repository.
-Before branch/commit/install operations, verify its absolute directory and exact origin
-`https://github.com/JIMMY081105/Building-Generation-Validation.git`. Do not push, merge,
-re-clone, initialize or replace `.git`. Unknown files and existing experiments remain intact.
+Software development belongs to `E:\Github\Research-Agent-Orchestrator`, with origin
+`https://github.com/JIMMY081105/Research-Agent-Orchestrator.git`. Verify the exact
+directory and origin before Git or installation operations. Software branch/PR
+publication requires the user's explicit authorization; merging is never automatic.
+Do not re-clone, initialize or replace `.git`. Existing accepted controller source
+and research repositories remain unchanged. Persistent live data and accepted
+desktop snapshots remain under `E:\Github\Building-Generation-Validation\.runtime`;
+this does not authorize writing its research source. Unknown files and existing
+experiments remain intact.
 
 The shipped policy permits observation plus explicit `analyze_numbers`, `inspect_text`
 and evidence-grounded `analyze_text` actions. Input is bounded literal JSON data, never
@@ -174,6 +179,21 @@ all review attempts share the unchanged global 50-per-UTC-day ledger. Desktop
 recovery may start only its verified UI service, respect Disable, and never kill
 an unresponsive process or take over research, VPN, or unknown listeners.
 
+The later explicit ten-total desktop grant preserves that original cycle and
+all prior charges. Further user-authorized single-call additions use immutable
+hash-linked JSON grant records in `worker/feature-audits/authorizations/` under
+the private runtime. Every child adds exactly one, keeps the same original cycle
+hash and binds its leaf source hash to the reviewed code. No reset, refund,
+automatic grant creation, model-produced authorization or new cycle is allowed.
+The manual operator must obtain explicit user consent before creating a child;
+the record is evidence of that consent, not authentication of the person.
+`tools/review_desktop.py` validates the entire chain in source and reserves calls
+atomically against both its total and the shared 50/UTC-day ledger. Its trusted
+review prompt reports the validated current total, so a historical ten-call
+grant is not mistaken for a permanent ban on later explicit consent. A failed
+or REWORK review remains charged and cannot approve a deployment. Temporary
+runtime monkeypatches are not an upgrade or review-authorization mechanism.
+
 The desktop Mission composer is explicitly authorized to submit only standalone
 `analyze_text` tasks through the verified active controller. The operator may
 choose either writer; the other engine reviews. This does not change project
@@ -181,3 +201,17 @@ governance or approve a production goal. UI writes require same-origin JSON and
 a per-service CSRF token, bounded input, canonical UUID and persistent idempotent
 admission. Status refreshes never dispatch work. Submission cannot resume a
 paused engine, alter budgets or execute commands supplied in model output.
+## Review context and usage evidence
+
+The local preparer may use an independently approved baseline plus a complete
+content-bound delta and explicit required context for defined UI paths. The
+current revision still needs a new decision; the prior PASS is never carried
+forward as current approval. Initial, sensitive and unknown changes require
+full context. Missing context returns NEEDS_CONTEXT; context limits defer
+without truncation or a model charge. New review grants are not inferred.
+
+Numeric provider usage is retained on successful and failed native responses
+when present. Missing is UNKNOWN, never fabricated as zero. Cumulative native
+thread samples and per-model counts are not added to per-call aggregates.
+No raw streams, hidden reasoning or credentials are stored for usage reporting.
+Skills are review criteria, not permission, budget or deployment bypasses.

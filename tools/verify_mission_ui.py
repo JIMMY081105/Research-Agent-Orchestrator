@@ -5,8 +5,10 @@ import argparse
 import base64
 import datetime as dt
 import json
+import re
 from pathlib import Path
 import subprocess
+import socket
 import sys
 import threading
 import time
@@ -100,6 +102,7 @@ class Browser:
         import websocket  # Optional QA dependency; the application does not import it.
         self.sequence, self.ws = 0, None
         self.process = None
+        self.port, self.closed = None, False
         profile = directory / 'edge-profile'
         profile.mkdir(exist_ok=False)
         edge = Path(r'C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe')
@@ -112,11 +115,14 @@ class Browser:
         try:
             active, deadline = profile / 'DevToolsActivePort', time.monotonic() + 15
             while not active.is_file():
-                if self.process.poll() is not None or time.monotonic() >= deadline:
+                # Edge's launcher can exit 0 after handing this unique profile
+                # to its own browser child. Wait for that profile's endpoint.
+                if self.process.poll() not in (None, 0) or time.monotonic() >= deadline:
                     raise RuntimeError('OWN_PREVIEW_BROWSER_START_FAILED')
                 time.sleep(.1)
             opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
             port = int(active.read_text().splitlines()[0])
+            self.port = port
             with opener.open('http://127.0.0.1:' + str(port) + '/json/list', timeout=5) as response:
                 page = next(p for p in json.load(response) if p.get('type') == 'page')
             self.ws = websocket.create_connection(page['webSocketDebuggerUrl'], timeout=15, suppress_origin=True)
@@ -170,6 +176,17 @@ class Browser:
             except subprocess.TimeoutExpired:
                 self.process.terminate()  # Only this own newly-created process.
                 self.process.wait(timeout=5)
+        deadline = time.monotonic() + 5
+        while self.port is not None and time.monotonic() < deadline:
+            try:
+                with socket.create_connection(('127.0.0.1', self.port), timeout=.3):
+                    pass
+            except OSError:
+                self.closed = self.process is None or self.process.poll() is not None
+                break
+            time.sleep(.1)
+        if self.port is None:
+            self.closed = self.process is None or self.process.poll() is not None
 
 
 def main():
@@ -209,6 +226,22 @@ def main():
             check('layout_' + str(width), geometry['panels'] and geometry['noScroll'] and geometry['avatars'] and 0 <= geometry['bottom'] < 45 and geometry['refsAbove'])
             browser.capture(directory / (str(width) + '.png'))
         browser.size(1536, 864)
+        probe_source=(ROOT/'native/SceneControl.cs').read_text(encoding='utf-8-sig')
+        probe=re.search(r'private const string Probe = @"(.*?)";',probe_source,re.S).group(1).replace('""','"')
+        browser.evaluate("(()=>{const a=document.querySelector('[data-observer-alert]');a.textContent='DEMO: preserved research stop alert';a.style.setProperty('display','block','important');a.style.height='24px';a.hidden=false})()")
+        for width,height in ((1092,565),(1230,642),(1536,750)):
+            browser.size(width,height)
+            for channel in ('worker','analysis'):
+                browser.evaluate("document.querySelector('#"+channel+"Tab').click()")
+                clipped_probe=browser.evaluate(probe)
+                if not clipped_probe['checks']['criticalElementsVisible']:
+                    report['clipping_diagnostic']=clipped_probe
+                check('unclipped_'+channel+'_'+str(width),clipped_probe['checks']['criticalElementsVisible'])
+        browser.size(1536,864)
+        browser.evaluate("document.querySelector('#workerTab').click();document.querySelector('.cy-mission-input').style.height='40px';document.querySelector('.cy-mission-input').style.flex='none'")
+        check('native_visibility_probe_rejects_ancestor_clipping',not browser.evaluate(probe)['checks']['criticalElementsVisible'])
+        browser.evaluate("document.querySelector('.cy-mission-input').style.removeProperty('height');document.querySelector('.cy-mission-input').style.removeProperty('flex')")
+        check('native_visibility_probe_recovers_after_restore',browser.evaluate(probe)['checks']['criticalElementsVisible'])
         browser.evaluate("document.querySelector('#workerPrompt').value='draft survives refresh';document.querySelector('#workerPrompt').dispatchEvent(new Event('input'));document.querySelector('#workerMode').value='full';document.querySelector('#workerMode').dispatchEvent(new Event('change'))")
         check('draft_mode_does_not_relabel_running_turn', browser.evaluate("document.querySelector('.cy-code .cy-agent-specs').textContent.includes('Approval needed')"))
         fixture.change('REVIEWING');refresh()
@@ -275,7 +308,7 @@ def main():
     finally:
         if browser:
             browser.close()
-            checks['own_browser_closed'] = browser.process.poll() is not None
+            checks['own_browser_closed'] = browser.closed
         if server:
             server.shutdown();server.server_close();thread.join(timeout=5)
             checks['own_fixture_closed'] = not thread.is_alive()

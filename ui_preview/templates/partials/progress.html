@@ -1,0 +1,18 @@
+{% if current_session %}
+<section data-view="progress" class="progress-page" hx-get="/execution/progress/{{ current_session }}" hx-trigger="load" hx-target="this" hx-swap="outerHTML">读取真实任务进度…</section>
+{% else %}
+<section class="progress-page live-board" data-view="progress">
+  <header class="progress-heading"><div><p class="eyebrow">MISSION CONTROL</p><h1>{{ '等待你的任务' if connected else '等待连接执行服务' }}</h1><p>在 Prompt 提交任务，执行和审核阶段会显示在这里。</p></div></header>
+  <div class="agents">
+  {% for agent,character,name in [('codex','david','David'),('claude','lucy','Lucy')] %}
+    <article class="agent {{ agent }}"><header class="agent-top"><span><i class="agent-dot"></i>{{ agent|capitalize }} · {{ name }}</span><span class="state-pill">{{ 'IDLE' if connected else 'OFFLINE' }}</span></header>
+      <div class="agent-hero"><video src="{{ url_for('avatar',name=character+'.mp4') }}" poster="{{ url_for('avatar',name=character+'.jpg') }}" aria-label="{{ name }} 动态头像" autoplay muted loop playsinline preload="auto"></video><div><p class="agent-role">{{ 'EXECUTOR' if agent=='codex' else 'REVIEWER' }}</p><h2>{{ '等待任务' if agent=='codex' else '等待交接' }}</h2><p class="muted">{{ '实现 · 检查 · 修复' if agent=='codex' else '独立检查 · 反馈 · 再验证' }}</p></div></div>
+      <dl class="specs"><div><dt>MODEL</dt><dd>{{ default_model if agent=='codex' and connected else '尚未调用' }}</dd></div><div><dt>STATE</dt><dd>{{ '空闲' if connected else '未连接' }}</dd></div></dl>
+      <div class="stage-heading">CURRENT STAGE<span class="thinking-dot"></span></div><ol class="stage-log compact-stages"><li><p>当前没有选中的任务，不代表其他会话已停止。</p></li></ol>
+      <footer><span>实时任务阶段</span><button type="button" hx-get="/view/prompt" hx-target="#workspace">前往 Prompt ↗</button></footer>
+    </article>
+  {% endfor %}
+  <div class="handoff" aria-hidden="true"><span></span>→</div>
+  </div>
+</section>
+{% endif %}

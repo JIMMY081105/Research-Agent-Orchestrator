@@ -15,7 +15,7 @@ from .dashboard_bundle import safe_path
 
 OWNER = "BGV.Windows.CodexWorker.v1"
 MODES = ("approval", "full")
-BUSY = ("QUEUED", "STARTING", "RUNNING", "WAITING_APPROVAL", "WAITING_INPUT", "REVIEWING", "CANCELLING")
+BUSY = ("QUEUED", "STARTING", "RUNNING", "WAITING_APPROVAL", "WAITING_INPUT", "REVIEWING", "CANCELLING", "WAITING_TOOL_EXIT")
 SECRET = re.compile(r"(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|sk-(?:proj-|ant-)?[A-Za-z0-9_-]{20,}|(?i:Bearer)\s+[A-Za-z0-9._-]{20,})")
 
 
@@ -98,6 +98,8 @@ class Store:
                 CREATE TABLE IF NOT EXISTS events(id INTEGER PRIMARY KEY AUTOINCREMENT, session TEXT NOT NULL,
                   turn TEXT, kind TEXT NOT NULL, body TEXT NOT NULL, created TEXT NOT NULL);
                 """)
+                if 'kind' not in {r[1] for r in db.execute('PRAGMA table_info(turns)')}:
+                    db.execute("ALTER TABLE turns ADD COLUMN kind TEXT NOT NULL DEFAULT 'task'")
 
     @contextlib.contextmanager
     def db(self, read_only=False):
@@ -141,11 +143,13 @@ class Store:
             return {}
 
     def capability(self):
+        from .desktop_recovery import preserve_running_ui_session
+        ui_session_migration=preserve_running_ui_session()
         service = self._service()
         paused = any(safe_path(self.runtime / name).exists() for name in ('admission-paused.json', 'review-pause.json', 'stop-when-idle.json'))
         if paused:
             service = {}
-        return {"enabled": bool(service), "owner": OWNER, "reason": None if service else "WORKER_SERVICE_UNAVAILABLE",
+        return {"enabled": bool(service), "owner": OWNER, "ui_session_migration":ui_session_migration,"reason": None if service else "WORKER_SERVICE_UNAVAILABLE",
                 "modes": list(MODES), "default_mode": "approval", "prompt_chars": 20000,
                 "skills": service.get("skills", []), "models": service.get("models", []),
                 "default_model": service.get("default_model"), "source_sha256": service.get("source_sha256"),
@@ -153,7 +157,7 @@ class Store:
 
     def submit(self, request):
         expected = {"id", "session", "prompt", "mode", "effort", "skills"}
-        if type(request) is not dict or set(request) != expected:
+        if type(request) is not dict or not expected <= set(request) <= expected | {'model','kind'}:
             raise WorkerError("INVALID_WORKER_SUBMISSION")
         turn_id = ident(request["id"])
         session = ident(request["session"]) if request["session"] is not None else turn_id
@@ -168,6 +172,13 @@ class Store:
         capability = self.capability()
         if not capability["enabled"]:
             raise WorkerError("WORKER_SERVICE_UNAVAILABLE", 503)
+        requested_model = request.get('model') or capability['default_model']
+        kind=request.get('kind','task')
+        if kind not in ('task','analysis'):raise WorkerError('INVALID_WORK_KIND')
+        if kind=='analysis' and (request['session'] is not None or request['mode']!='approval'):
+            raise WorkerError('ANALYSIS_REQUIRES_FRESH_READ_ONLY_SESSION')
+        if request.get('model') and requested_model not in capability.get('models', []):
+            raise WorkerError('MODEL_NOT_AVAILABLE')
         names = {x["id"] for x in capability["skills"]}
         if any(x not in names for x in skills):
             raise WorkerError("UNKNOWN_WORKER_SKILL")
@@ -187,10 +198,12 @@ class Store:
                 if request["session"] is not None:
                     raise WorkerError("UNKNOWN_WORKER_SESSION", 404)
                 db.execute("INSERT INTO sessions(id,workspace,model,created) VALUES(?,?,?,?)",
-                           (session, str(self.workspace(session)), capability["default_model"], utc()))
+                           (session, str(self.workspace(session)), requested_model, utc()))
+            elif request.get('model') and requested_model != row['model']:
+                raise WorkerError('NEW_SESSION_REQUIRED_FOR_MODEL_CHANGE')
             stamp = utc()
-            db.execute("INSERT INTO turns(id,session,input_hash,prompt,mode,effort,skills,state,created,updated) VALUES(?,?,?,?,?,?,?,?,?,?)",
-                       (turn_id, session, binding, prompt, request["mode"], request["effort"], json.dumps(skills), "QUEUED", stamp, stamp))
+            db.execute("INSERT INTO turns(id,session,input_hash,prompt,mode,effort,skills,state,created,updated,kind) VALUES(?,?,?,?,?,?,?,?,?,?,?)",
+                       (turn_id, session, binding, prompt, request["mode"], request["effort"], json.dumps(skills), "QUEUED", stamp, stamp,kind))
             folder = safe_path(self.runtime / "turns" / turn_id)
             folder.mkdir(parents=True, exist_ok=False)
             save(folder / "request.json", request)

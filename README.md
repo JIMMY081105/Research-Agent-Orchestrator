@@ -1,30 +1,14 @@
 # Research Agent Orchestrator
 
-> **Status: PARTIAL overall — desktop UI update deployed locally; native worker paused.**
-> The desktop release at commit `111b6f4` passed 184 UI/desktop/worker regression
-> tests, a fresh fixed-source Claude audit, installed native video/layout checks,
-> a natural Windows time-trigger receipt and real Disable/Enable/reopen checks.
-> This accepts the desktop update, not a new native-worker deployment. The native
-> worker remains paused/unregistered; its current real dual-CLI and scheduler
-> acceptance is outstanding. Existing bounded analysis and read-only telemetry
-> remain separate. No server research task, building gate or GPU result is certified.
-> The conversation/stage view has its own fixed-snapshot acceptance; the earlier
-> 184-test record applies to `111b6f4`, not to a newly edited checkout.
-> Original downloads, private runtime and acceptance records are not published.
+**Windows local Codex → Claude execution, automatic feedback and opt-in GitHub result delivery. Scientific goals remain separately authorized.**
 
+Open **BGV Scene Control** from Desktop or Start. The single native BGV window uses the approved cyberpunk Flask + Jinja2 + HTMX layout: Prompt for explicit tasks or read-only text analysis, Progress for owned turn/review records, and native Approval needed / Full Access profiles. It reconnects to the verified worker automatically, preserving the composer during readiness changes. The compact GPU chip remains demonstration data. Without an enabled verified worker, sending is disabled.
 
-A Windows desktop control room for **Codex execution, Claude review and research
-operations visibility**, using existing CLI subscription logins.
+Every installed release needs current regression evidence, a tool-disabled independent source review, real CLI execution/rework, fixed snapshots, natural Windows scheduled starts and maintenance checks. Local runtime reports identify the actually accepted version; historical tests do not certify later source. Passing an infrastructure task is not acceptance of a Factory80/scientific workflow. Evidence and old failed records stay private.
 
-![Scene Control with animated David and Lucy portraits](docs/images/scene-control-live.gif)
+Reviews apply the fixed diff-review, risk-aware-review and token-budget skills to complete differences and necessary context. The user removed the arbitrary 24 KiB packet gate. Added content is included once even after REWORK, prior findings remain, and NEEDS_CONTEXT cannot become PASS. The host records provider-reported token counters; unchanged polling invokes no model. [Integration contracts](WORKER.md) · [Result delivery](DELIVERY.md) · [UI source and launch instructions](ui_preview/README.md).
 
-*Animated UI preview rendered from the current interface with synthetic demonstration
-status. No live jobs, prompts, sessions or research records are shown. This is not
-deployment or scientific acceptance evidence. [Static preview](docs/images/scene-control.png).*
-
-The same cropped, silent clips used by the desktop are included in
-[`assets/avatars/`](assets/avatars). The full UI animation plays directly on this page;
-the application uses the pinned MP4 files at their original playback speed.
+This repository is software development. Private scientific reports/results are delivered separately to Building-Generation-Validation for user review. No branch merges, research-source edits, GPU work or Factory80 batch release are performed by publishing this software.
 
 ## What belongs here
 
@@ -43,64 +27,20 @@ Scene/quality-gate modules here are integration adapters and evidence contracts.
 Publishing this software does not launch a job, adopt an existing session, certify
 a building, or authorize research changes.
 
-## Desktop features
+## Desktop and execution
 
-| Section | Controls and information |
-| --- | --- |
-| Mission | Conversation above a bottom composer, references/skills above the input, optional system/history drawer |
-| Compute | Read-only SQZ GPU utilization, memory, temperature and observation freshness |
-| Codex / David | Large outside-left portrait, reported model/effort/permissions, execution phase and scrolling public records |
-| Claude / Lucy | Large outside-right portrait, reported review settings, independent review phase and bounded feedback |
+- **Prompt:** bottom composer, reference material, actual supported model/effort selection and native permission profiles. Task/Standard is connected; Plan/Goal/Fast are not accepted execution modes.
+- **Progress:** David/Lucy stage board and actual execution/review status. Conversation, command records and approval requests remain in Prompt.
+- **Text analysis:** always a fresh native read-only session. It cannot inherit an existing write-capable session.
+- **Corrections:** at most two repairs using concrete independent findings, preserving the original input and every attempt. Crashes or uncertain starts require reconciliation rather than replay.
+- **Skills:** select actual available Codex skills in the composer; Claude's three review skills are supplied by the host.
+- **Draft PR delivery:** opt in for a new task, have Codex prepare `REPORT.md` and optional reviewed images, then let the deterministic publisher verify the fixed PASS/artifacts and deliver them to the private results repository. It never merges, invokes another model, adopts old jobs or retries historical rejected publications.
+- **UI continuity:** the application's own signing key is encrypted with current-user DPAPI under LocalAppData, outside repositories; a planned UI update preserves existing owned conversations. Subscription authentication is untouched.
+- **Boundaries:** Full Access intentionally removes OS directory confinement and command approval for the selected turn; task authorization still governs research, GPU and publication. Approval mode retains native restrictions. The shared daily review cap is 50; charges and failures are retained.
 
-- **Approval needed / Full Access:** native permission profiles captured per turn.
-  Approval needed uses a Windows workspace sandbox; Full Access removes that sandbox
-  and command-by-command approval. Changing the selector affects the next turn,
-  never a pending request or an already running turn.
-- **Independent services:** closing or upgrading the UI does not restart the worker
-  or take over an unrelated Codex/research process.
-- **Evidence over claims:** task IDs, immutable source/input hashes, shared review
-  accounting and artifact checks. A workspace PASS is not a physics simulation PASS.
-- **Bounded operation:** no recursive agents, paid API fallback, automatic GitHub
-  publication/merge, or blind replay after an uncertain crash.
-- **Idle without model calls:** status refreshes do not invoke models. The legacy
-  bounded queue checks every 15 minutes; explicit worker submissions start promptly.
-- **Local animated portraits:** matching square David/Lucy video frames, silent
-  loops, original playback speed, pause/reduced-motion support and sprite fallback.
-  Native playback, pause/resume and layout passed the installed desktop checks.
-  See [AVATARS.md](AVATARS.md) for the versioned portrait assets and their provenance.
-- **One stable desktop entry:** Desktop, Start menu and taskbar shortcuts resolve
-  the currently accepted snapshot. Opening again focuses the same version's window
-  and checks the local connection without discarding an unsent draft. If its owned
-  service needs recovery, connection attempts are bounded; an explicitly disabled
-  service stays disabled.
+Desktop, Start and the existing taskbar entry open the same **BGV Scene Control** window. Worker and publisher execute separately approved immutable snapshots. Inspect `tools/worker.ps1 -Mode Status` and `tools/delivery.ps1 -Mode Status` for this machine; both provide scoped Disable/Enable/StopWhenIdle/Uninstall controls. Existing research, observer, VPN and archive tasks are independent. See [WORKER.md](WORKER.md), [POLICY.md](POLICY.md) and [OPERATIONS.md](OPERATIONS.md).
 
-The conversation UI shows the real registered execution/review cycle, slow running
-pulses and evidence-triggered handoffs. Model/effort/permission fields use backend
-records; missing values remain unknown. It does not reveal hidden reasoning or
-invent a research plan from prose. See [UI.md](UI.md) for controls and exact limits.
-
-Stack: Python 3.12 (primarily standard library), SQLite, C#/.NET Framework 4.8 with
-WebView2, HTML/CSS/JavaScript, PowerShell and Windows Task Scheduler.
-
-## Use and deployment
-
-On the configured Windows machine open **BGV Scene Control** from Desktop, Start
-or the taskbar pin. The installed desktop connects to its owned local service;
-**文本分析** retains its separate bounded, tool-disabled workflow.
-
-The **Codex 工作** interface supports tasks, permission selection and approval cards
-with **允许这一次 / 拒绝**. These execution controls require an accepted, enabled native
-worker. That worker is currently paused/unregistered; publishing its source does not
-activate it or make it available for research dispatch.
-
-This is currently a single-machine deployment, not a portable installer. Helpers
-intentionally retain the existing `E:\Github\Building-Generation-Validation`
-runtime root so publishing this source does not disturb running services. Existing
-CLI login, registered tools and private configuration are not bundled. See
-[WORKER.md](WORKER.md), [DESKTOP.md](DESKTOP.md), [POLICY.md](POLICY.md) and
-[OPERATIONS.md](OPERATIONS.md) for deployment, ownership, recovery and maintenance.
-Permission selection is separate from authorizing a research goal. See
-[STAGES.md](STAGES.md) for project roles and the four-stage workflow.
+The following sections describe the separate bounded controller and earlier integration contracts; they do not grant a research goal.
 
 ## Bounded controller and integration details
 
@@ -265,3 +205,13 @@ Mission includes a bounded prompt composer for supplied-text analysis: choose
 Codex or Claude to write, with the other reviewing. Task submission, waiting,
 structured results and acceptance are distinct states. This uses the existing
 allowlisted queue and does not grant research writes, asset browsing or GPU use.
+## Focused reviews and token evidence
+
+Source audits can prepare complete differences plus explicit UI cross-language
+context against an approved baseline. Sensitive or unknown changes expand to
+full source; oversized or incomplete context defers before a model call.
+Provider-reported input, output and cache counts are retained as numeric evidence;
+missing historical values stay unknown. Three small original review skills are
+available for both Codex and Claude. See [REVIEW.md](REVIEW.md) for preparation,
+installation, usage reporting and acceptance limits. This development change does
+not replace a running fixed snapshot or reset any review history.
