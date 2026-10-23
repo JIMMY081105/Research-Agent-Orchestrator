@@ -144,6 +144,18 @@ class DeliveryTests(unittest.TestCase):
   self.enroll()
   with patch.object(d.subprocess,'run',return_value=Mock(returncode=1)):self.run_delivery()
   self.run_delivery();self.assertEqual(self.b.published,1);self.assertEqual(self.state()['archive_status'],'FAILED_NO_PUBLICATION_RETRY')
+ def test_slow_archive_child_is_not_killed_while_holding_shared_lock(self):
+  import subprocess,sys
+  run=subprocess.run;marker=self.rt/'simulated-archive.lock'
+  code='import pathlib,time; p=pathlib.Path('+repr(str(marker))+');p.write_text("held");time.sleep(.3);p.unlink();print("appended verified")'
+  def slow_archive(*args,**kwargs):
+   # Compress only the injected external deadline. A forced timeout would kill
+   # the harmless real child and leave its simulated shared lock behind.
+   if 'timeout' in kwargs:kwargs['timeout']=.1
+   return run([sys.executable,'-c',code],**kwargs)
+  self.enroll()
+  with patch.object(d.subprocess,'run',side_effect=slow_archive):self.run_delivery()
+  self.assertFalse(marker.exists());self.assertEqual(self.state()['archive_status'],'APPENDED');self.assertEqual(self.b.published,1)
  def test_unknown_pause_record_is_not_overwritten(self):
   p=self.rt/'worker-delivery/admission-paused.json';d.save(p,{'owner':'someone-else'})
   with self.assertRaisesRegex(d.DeliveryError,'UNKNOWN_PAUSE'):d.control(self.rt,self.root,'disable')

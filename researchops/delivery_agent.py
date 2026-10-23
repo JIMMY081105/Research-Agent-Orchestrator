@@ -151,6 +151,17 @@ def prepare(runtime,b,intent,proof):
  save(intake/'ready.json',{'schema':1,'id':tid,'title':'Task result '+tid,'summary':'Independent task-workspace review passed. This is a reviewable result package, not scientific READY or merge authorization.','reported_status':'PARTIAL','files':items})
  return b.prepare(tid)
 
+def archive_delivery(folder,intent,state):
+ """Append factual delivery evidence without force-killing the shared archiver."""
+ try:
+  note=folder/'archive.md';note.write_text('**ACTUAL EXECUTION**\nDeterministic reviewed result delivery. Task: '+intent['task']+'\nDraft PR: '+state['url']+'\nPackage SHA256: '+state['package_sha256']+'\nStatus: SUCCESS\nNo scientific acceptance or merge performed.\n',encoding='utf-8')
+  # The archiver owns a shared lock and bounded lock-acquisition wait. A shorter
+  # forced deadline can strand that lock and block unrelated agents. Our service
+  # heartbeat remains independent while the existing archiver finishes.
+  archived=subprocess.run([r'C:\Python312\python.exe',r'F:\Personal Data\_archive_system\ai_archive.py','annotate','--platform','OpenAI Codex','--title','Reviewed task result delivery '+intent['task'],'--body-file',str(note)],capture_output=True,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
+  return 'APPENDED' if archived.returncode==0 else 'FAILED_NO_PUBLICATION_RETRY'
+ except (OSError,subprocess.TimeoutExpired):return 'UNVERIFIED_NO_PUBLICATION_RETRY'
+
 def tick(runtime,root,bridge_factory=bridge):
  activation=verified_activation(runtime,root);home=runtime/'worker-delivery'
  results=[]
@@ -179,11 +190,7 @@ def tick(runtime,root,bridge_factory=bridge):
    if result.get('state') not in ('PUBLISHED_DRAFT','OPEN_FOR_USER_REVIEW') or not re.fullmatch(r'https://github.com/JIMMY081105/Building-Generation-Validation/pull/[1-9][0-9]*',str(result.get('url'))):raise DeliveryError('DRAFT_READBACK_NOT_CONFIRMED')
    state={'state':'DELIVERED','url':result['url'],'package_sha256':state['package_sha256'],'at':utc()};save(folder/'state.json',state);results.append(state)
    # Archive the action, never the artifact or raw model/provider output.
-   try:
-    note=folder/'archive.md';note.write_text('**ACTUAL EXECUTION**\nDeterministic reviewed result delivery. Task: '+intent['task']+'\nDraft PR: '+result['url']+'\nPackage SHA256: '+state['package_sha256']+'\nStatus: SUCCESS\nNo scientific acceptance or merge performed.\n',encoding='utf-8')
-    archived=subprocess.run([r'C:\Python312\python.exe',r'F:\Personal Data\_archive_system\ai_archive.py','annotate','--platform','OpenAI Codex','--title','Reviewed task result delivery '+intent['task'],'--body-file',str(note)],capture_output=True,timeout=45,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
-    state['archive_status']='APPENDED' if archived.returncode==0 else 'FAILED_NO_PUBLICATION_RETRY'
-   except (OSError,subprocess.TimeoutExpired):state['archive_status']='UNVERIFIED_NO_PUBLICATION_RETRY'
+   state['archive_status']=archive_delivery(folder,intent,state)
    save(folder/'state.json',state)
    safe(marker).unlink()
   except Exception as e:
