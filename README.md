@@ -1,12 +1,12 @@
 # Research Agent Orchestrator
 
-**Status: DEPLOYED for bounded local Codex → Claude Task/Standard execution (2026-10-23). Research automation remains separately gated.**
+**Windows local Codex → Claude execution, automatic feedback and opt-in GitHub result delivery. Scientific goals remain separately authorized.**
 
 Open **BGV Scene Control** from Desktop or Start. The single native BGV window uses the approved cyberpunk Flask + Jinja2 + HTMX layout: Prompt for explicit tasks or read-only text analysis, Progress for owned turn/review records, and native Approval needed / Full Access profiles. It reconnects to the verified worker automatically, preserving the composer during readiness changes. The compact GPU chip remains demonstration data. Without an enabled verified worker, sending is disabled.
 
-Acceptance includes 288 regressions, 12 UI tests, real native permission boundary probes, independent tool-disabled source-review closure PASS, an actual desktop submission returning 42 with Claude PASS, and an installed-worker negative control: wrong artifact 41 → Claude REWORK → Codex repair → fresh Claude PASS → host readback 42. Windows naturally started the fixed worker at 00:37:02 UTC; Disable/Enable rejected new admissions without restarting its active process. Full local evidence and old failed records remain private.
+Every installed release needs current regression evidence, a tool-disabled independent source review, real CLI execution/rework, fixed snapshots, natural Windows scheduled starts and maintenance checks. Local runtime reports identify the actually accepted version; historical tests do not certify later source. Passing an infrastructure task is not acceptance of a Factory80/scientific workflow. Evidence and old failed records stay private.
 
-Reviews use complete bounded differences and necessary source context, a single provider turn with strict local JSON/binding validation, and provider-reported token counters. No blanket token-saving percentage is claimed. [Integration behavior and remaining gates](EXECUTION-INTEGRATION.md) · [UI source and launch instructions](ui_preview/README.md).
+Reviews apply the fixed diff-review, risk-aware-review and token-budget skills to complete differences and necessary context. The user removed the arbitrary 24 KiB packet gate. Added content is included once even after REWORK, prior findings remain, and NEEDS_CONTEXT cannot become PASS. The host records provider-reported token counters; unchanged polling invokes no model. [Integration contracts](WORKER.md) · [Result delivery](DELIVERY.md) · [UI source and launch instructions](ui_preview/README.md).
 
 This repository is software development. Private scientific reports/results are delivered separately to Building-Generation-Validation for user review. No branch merges, research-source edits, GPU work or Factory80 batch release are performed by publishing this software.
 
@@ -30,12 +30,15 @@ a building, or authorize research changes.
 ## Desktop and execution
 
 - **Prompt:** bottom composer, reference material, actual supported model/effort selection and native permission profiles. Task/Standard is connected; Plan/Goal/Fast are not accepted execution modes.
-- **Progress:** per-browser owned sessions, public events, explicit approval requests and actual review results; idle refreshes make no model calls.
+- **Progress:** David/Lucy stage board and actual execution/review status. Conversation, command records and approval requests remain in Prompt.
 - **Text analysis:** always a fresh native read-only session. It cannot inherit an existing write-capable session.
 - **Corrections:** at most two repairs using concrete independent findings, preserving the original input and every attempt. Crashes or uncertain starts require reconciliation rather than replay.
+- **Skills:** select actual available Codex skills in the composer; Claude's three review skills are supplied by the host.
+- **Draft PR delivery:** opt in for a new task, have Codex prepare `REPORT.md` and optional reviewed images, then let the deterministic publisher verify the fixed PASS/artifacts and deliver them to the private results repository. It never merges, invokes another model, adopts old jobs or retries historical rejected publications.
+- **UI continuity:** the application's own signing key is encrypted with current-user DPAPI under LocalAppData, outside repositories; a planned UI update preserves existing owned conversations. Subscription authentication is untouched.
 - **Boundaries:** Full Access intentionally removes OS directory confinement and command approval for the selected turn; task authorization still governs research, GPU and publication. Approval mode retains native restrictions. The shared daily review cap is 50; charges and failures are retained.
 
-Desktop, Start and the existing taskbar entry open the same **BGV Scene Control** window. The separately installed worker executes immutable snapshot `e8ca7a2e16f73c098a4f2d574ec0edfa90df10f524d41f0571600f2edfd8a0be`; subsequent frontend-only reconnect/branding changes use the user's UI-review exemption. Existing observer/legacy desktop services remain unchanged. See [EXECUTION-INTEGRATION.md](EXECUTION-INTEGRATION.md), [WORKER.md](WORKER.md), [POLICY.md](POLICY.md) and [OPERATIONS.md](OPERATIONS.md).
+Desktop, Start and the existing taskbar entry open the same **BGV Scene Control** window. Worker and publisher execute separately approved immutable snapshots. Inspect `tools/worker.ps1 -Mode Status` and `tools/delivery.ps1 -Mode Status` for this machine; both provide scoped Disable/Enable/StopWhenIdle/Uninstall controls. Existing research, observer, VPN and archive tasks are independent. See [WORKER.md](WORKER.md), [POLICY.md](POLICY.md) and [OPERATIONS.md](OPERATIONS.md).
 
 The following sections describe the separate bounded controller and earlier integration contracts; they do not grant a research goal.
 

@@ -13,6 +13,28 @@ from researchops import winproc
 
 
 class WorkerServiceTests(unittest.TestCase):
+    def test_actual_windows_status_read_lock_cannot_stop_owned_worker(self):
+        import ctypes as C
+        from ctypes import wintypes as W
+        self.service.heartbeat();path=self.store.runtime/'service.json';old=path.read_bytes()
+        kernel=C.WinDLL('kernel32',use_last_error=True)
+        kernel.CreateFileW.argtypes=[W.LPCWSTR,W.DWORD,W.DWORD,C.c_void_p,W.DWORD,W.DWORD,W.HANDLE];kernel.CreateFileW.restype=W.HANDLE
+        kernel.CloseHandle.argtypes=[W.HANDLE]
+        handle=kernel.CreateFileW(str(path),0x80000000,3,None,3,0,None)
+        self.assertNotEqual(handle,C.c_void_p(-1).value)
+        try:
+            self.service.last_heartbeat=0
+            self.assertFalse(self.service.heartbeat())
+            self.assertEqual(path.read_bytes(),old);self.assertEqual(self.service.last_heartbeat,0)
+            self.assertEqual(self.service.heartbeat_write_failures,1);self.service.rpc.close.assert_not_called()
+        finally:kernel.CloseHandle(handle)
+        self.assertTrue(self.service.heartbeat())
+        self.assertEqual(json.loads(path.read_bytes())['heartbeat_write_failures'],1)
+
+    def test_unknown_status_write_error_is_not_silenced(self):
+        with patch('researchops.worker_service.save',side_effect=OSError('disk error')):
+            with self.assertRaises(OSError):self.service.heartbeat()
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory(); self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)

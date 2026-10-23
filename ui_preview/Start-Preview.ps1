@@ -10,10 +10,21 @@ $acquired=$false
 try {
 try {$acquired=$startupLock.WaitOne(20000)} catch [Threading.AbandonedMutexException] {$acquired=$true}
 if(-not $acquired){throw 'Another Scene Control startup is still in progress'}
-$repo=[IO.Path]::GetFullPath((Split-Path -Parent $PSScriptRoot))
+$repo='E:\Github\Research-Agent-Orchestrator'
 $state=Join-Path $repo '.runtime\desktop-ui'
 $python=Join-Path $repo '.venv\Scripts\pythonw.exe'
 $appScript=Join-Path $PSScriptRoot 'app.py'
+$appWorkdir=$repo
+$workerActivation='E:\Github\Building-Generation-Validation\.runtime\worker\activation.json'
+if(Test-Path -LiteralPath $workerActivation){
+    $worker=Get-Content -LiteralPath $workerActivation -Raw|ConvertFrom-Json
+    if($worker.owner -cne 'BGV.Windows.CodexWorker.v1' -or $worker.sha256 -cnotmatch '^[0-9a-f]{64}$'){throw 'Unknown worker activation'}
+    $expected='E:\Github\Building-Generation-Validation\.runtime\desktop\snapshots\'+$worker.sha256+'\source'
+    if($worker.source -cne $expected){throw 'Worker snapshot path mismatch'}
+    & 'C:\Python312\python.exe' -B (Join-Path $expected 'worker.py') status --expected-hash $worker.sha256|Out-Null
+    if($LASTEXITCODE -ne 0){throw 'Accepted UI snapshot verification failed'}
+    $appScript=Join-Path $expected 'ui_preview\app.py';$appWorkdir=$expected
+}
 # One application for both historical invocations. -Desktop is retained only
 # for compatibility with existing shortcuts; omitting it cannot open a second UI.
 $native=Join-Path $state 'app'
@@ -55,7 +66,7 @@ if($health -and ($health.owner -cne 'BGV.SceneControl.UI.v1' -or $health.ui_only
 if(-not $health){
     $listener=Get-NetTCPConnection -LocalPort 8878 -State Listen -ErrorAction SilentlyContinue
     if($listener){throw 'Preview port is already occupied; nothing stopped'}
-    $process=Start-Process -FilePath $python -ArgumentList @('-B',('"'+$appScript+'"')) -WorkingDirectory $repo -WindowStyle Hidden -PassThru
+    $process=Start-Process -FilePath $python -ArgumentList @('-B',('"'+$appScript+'"')) -WorkingDirectory $appWorkdir -WindowStyle Hidden -PassThru
     @{owner='ResearchAgentOrchestrator.UI.Preview';pid=$process.Id;started_utc=(Get-Date).ToUniversalTime().ToString('o')}|ConvertTo-Json|Set-Content -LiteralPath (Join-Path $state 'server.json') -Encoding utf8
     for($i=0;$i -lt 30;$i++){$health=Preview-Health;if($health){break};Start-Sleep -Milliseconds 150}
 }

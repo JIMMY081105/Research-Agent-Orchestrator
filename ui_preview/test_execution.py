@@ -5,7 +5,57 @@ import app
 
 
 class ExecutionUITests(unittest.TestCase):
-    def setUp(self):self.client=app.create_app().test_client()
+    def setUp(self):self.client=app.create_app(testing=True).test_client()
+    def test_publisher_identity_dependency_failure_disables_only_delivery(self):
+        import execution,json,tempfile,hashlib,datetime as dt
+        from pathlib import Path
+        import builtins
+        real_import=builtins.__import__
+        with tempfile.TemporaryDirectory() as directory:
+            rt=Path(directory);files={n:hashlib.sha256(b'').hexdigest() for n in ('delivery_agent.py','researchops/__init__.py','researchops/delivery_agent.py','tests/test_delivery_agent.py','tools/delivery.ps1','DELIVERY.md')}
+            digest=hashlib.sha256(json.dumps(files,ensure_ascii=False,sort_keys=True,separators=(',',':')).encode()).hexdigest()
+            home=rt/'worker-delivery';source=home/'snapshots'/digest/'source'
+            for name in files:
+                p=source/name;p.parent.mkdir(parents=True,exist_ok=True);p.write_bytes(b'')
+            (source.parent/'manifest.json').write_text(json.dumps({'files':files}))
+            (home/'activation.json').write_text(json.dumps({'owner':'BGV.Worker.ResultDelivery.v1','source':str(source),'sha256':digest}))
+            (home/'service.json').write_text('{}')
+            def failed_import(name,*args,**kwargs):
+                if name=='researchops.dashboard_state':raise ImportError('missing identity dependency')
+                return real_import(name,*args,**kwargs)
+            with patch.object(execution,'RUNTIME',rt),patch('builtins.__import__',side_effect=failed_import):
+                self.assertEqual(execution.delivery_capability(),{'enabled':False})
+    def test_unavailable_publisher_blocks_optin_before_queue_admission(self):
+        import execution
+        form={'prompt':'produce report','publish_result':'yes','permission':'Full Access','effort':'High','speed':'Standard','mode':'Task'}
+        with patch('execution.delivery_capability',return_value={'enabled':False}),patch('execution.store') as backend:
+            with self.assertRaisesRegex(ValueError,'DELIVERY_SERVICE_NOT_READY'):execution.submit(form)
+            backend.assert_not_called()
+    def test_selected_skills_and_optin_use_fixed_publisher_command(self):
+        import execution
+        from pathlib import Path
+        from werkzeug.datastructures import MultiDict
+        form=MultiDict([('prompt','produce report'),('request_id','id'),('publish_result','yes'),('permission','Full Access'),('effort','High'),('speed','Standard'),('mode','Task'),('skills','chosen1'),('skills','chosen2')])
+        with patch('execution.delivery_capability',return_value={'enabled':True,'source':Path('C:/fixed/publisher')}),patch('execution.store') as backend,patch('execution.subprocess.run') as invoke:
+            backend.return_value.submit.return_value={'id':'task-id','session':'session-id'};invoke.return_value.returncode=0
+            result=execution.submit(form)
+        request=backend.return_value.submit.call_args.args[0]
+        self.assertEqual(request['skills'],['chosen1','chosen2']);self.assertIn('REPORT.md',request['prompt'])
+        self.assertEqual(result['delivery'],'ENROLLED');self.assertEqual(invoke.call_args.args[0][-3:],['--task','task-id','--authorize-draft'])
+        self.assertNotIn('shell',invoke.call_args.kwargs)
+    def test_analysis_does_not_enroll_or_require_publisher(self):
+        import execution
+        form={'prompt':'analyze','channel':'analysis','publish_result':'yes','permission':'Full Access','effort':'High','speed':'Standard','mode':'Task'}
+        with patch('execution.delivery_capability') as cap,patch('execution.store') as backend,patch('execution.subprocess.run') as invoke:
+            backend.return_value.submit.return_value={'id':'id','session':'session'};execution.submit(form)
+        cap.assert_not_called();invoke.assert_not_called()
+        request=backend.return_value.submit.call_args.args[0];self.assertEqual(request['kind'],'analysis');self.assertEqual(request['mode'],'approval')
+    def test_delivery_link_and_late_writer_exit_keep_real_polling(self):
+        with self.client.session_transaction() as s:s['owned_worker_sessions']=['owned']
+        status={'turns':[{'id':'x','prompt':'task','state':'WAITING_TOOL_EXIT','response':'','reworks':0}], 'events':[],'approvals':[],'review_summary':None,'delivery':{'state':'PUBLISHING'}}
+        with patch('execution.status',return_value=status):
+            html=self.client.get('/execution/status/owned').get_data(as_text=True)
+        self.assertIn('hx-trigger="every 2s"',html);self.assertIn('PUBLISHING',html)
     def test_execute_requires_nonce_even_for_local_origin(self):
         self.assertEqual(self.client.post('/execute',data={'prompt':'hello'},headers={'Origin':'http://localhost'}).status_code,403)
     def test_unavailable_worker_keeps_submit_disabled(self):

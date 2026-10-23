@@ -46,9 +46,11 @@ class ContextTests(unittest.TestCase):
         self.assertIn('-value=1',b['changes'][0]['diff']);self.assertIn('+value=2',b['changes'][0]['diff'])
         self.assertNotEqual(a['binding_sha256'],b['binding_sha256'])
         self.assertEqual(b['previous_review']['verdict'],'REWORK')
-    def test_context_limit_fails_before_model_charge(self):
-        with self.assertRaisesRegex(WorkerError,'CONTEXT_LIMIT'):
-            packet(dict(id='x',prompt='x'*25000,response=''), 'source', self.snapshot())
+    def test_user_removed_24k_packet_gate_without_truncating_request(self):
+        request='x'*25000
+        value,size=packet(dict(id='x',prompt=request,response=''), 'source', self.snapshot())
+        self.assertEqual(value['request'],request)
+        self.assertGreater(size,24576)
     def test_first_review_retains_complete_source_once_without_duplicate_addition_diff(self):
         source=''.join('value_'+str(i)+'=42\n' for i in range(900))
         value,size=packet(dict(id='x',prompt='Review this exact source',response='done'),'source',self.snapshot(source))
@@ -57,9 +59,21 @@ class ContextTests(unittest.TestCase):
         self.assertEqual(value['changes'][0]['content_ref'],'workspace.contents')
         self.assertEqual(value['changes'][0]['after'],value['workspace']['files']['x.py'])
         self.assertNotIn('diff',value['changes'][0])
-    def test_deduplication_does_not_bypass_oversize_actual_source(self):
-        with self.assertRaisesRegex(WorkerError,'CONTEXT_LIMIT'):
-            packet(dict(id='x',prompt='Review complete source',response=''),'source',self.snapshot('x'*25000))
+    def test_large_required_source_is_preserved_without_24k_gate(self):
+        source='x'*25000
+        value,size=packet(dict(id='x',prompt='Review complete source',response=''),'source',self.snapshot(source))
+        self.assertEqual(value['workspace']['contents']['x.py'],source)
+        self.assertGreater(size,24576)
+    def test_rework_new_file_not_duplicated_and_old_findings_remain(self):
+        turn=dict(id='x',prompt='fix',response='')
+        old,_=packet(turn,'source',self.snapshot())
+        after=self.snapshot();after['contents']['report.md']='report\n'*2000
+        after['files']['report.md']={'sha256':hashlib.sha256(after['contents']['report.md'].encode()).hexdigest(),'bytes':len(after['contents']['report.md'].encode())}
+        value,_=packet(turn,'source',after,{**old,'review':{'verdict':'REWORK','issues':['unresolved']}})
+        change=next(c for c in value['changes'] if c['path']=='report.md')
+        self.assertEqual(change['content_ref'],'workspace.contents');self.assertNotIn('diff',change)
+        self.assertEqual(value['workspace']['contents']['report.md'],after['contents']['report.md'])
+        self.assertEqual(value['previous_review']['issues'],['unresolved'])
     def test_repair_keeps_deleted_source_diff_unchanged_source_and_prior_findings(self):
         before=self.snapshot();before['files']['y.py']={'sha256':'unchanged'};before['contents']['y.py']='keep=1\n'
         original,_=packet(dict(id='x',prompt='fix',response=''),'source',before)
@@ -93,6 +107,31 @@ class AutoLoopTests(unittest.TestCase):
         self.assertEqual(self.service.rpc.call.call_args.args[1]['sandboxPolicy'],{'type':'readOnly'})
     def completed(self,turn):
         self.service.handle({'method':'turn/completed','params':{'threadId':'owned','turn':{'id':'native','status':'completed'}}})
+    def test_reviewer_missing_context_pauses_without_queuing_a_repair(self):
+        turn=self.turn();self.begin(turn)
+        self.review.side_effect=WorkerError('REVIEW_NEEDS_CONTEXT')
+        self.completed(turn)
+        current=self.store.status()['turns'][0]
+        self.assertEqual(current['state'],'PAUSED_REVIEW')
+        self.assertEqual(current['reason'],'REVIEW_NEEDS_CONTEXT')
+        self.assertEqual(current['reworks'],0);self.assertIsNone(self.service.next_turn())
+    def test_real_review_adapter_receives_fixed_skills_and_preserves_needs_context(self):
+        from researchops.worker_review import review_turn
+        turn=self.turn();turn['response']='Need actual evidence'
+        Path(turn['workspace']).mkdir(parents=True)
+        (Path(turn['workspace'])/'example.py').write_text('value=42\n',encoding='utf-8')
+        def invoke(engine,machine,policy,prompt,schema,*args,**kwargs):
+            self.assertIn('necessary',prompt)
+            self.assertIn('NEEDS_CONTEXT',prompt)
+            self.assertIn('#',prompt)
+            binding=json.loads(schema.read_text())['properties']['binding_sha256']['const']
+            return {'binding_sha256':binding,'verdict':'NEEDS_CONTEXT','issues':['Missing required.py caller']},{'exit_code':0,'tools_disabled':True}
+        with patch('researchops.worker_review.active',return_value=(None,None,None,{},{})),patch('researchops.worker_review.charge',return_value='call'),patch('researchops.worker_review.adapters.invoke',side_effect=invoke):
+            with self.assertRaisesRegex(WorkerError,'REVIEW_NEEDS_CONTEXT'):
+                review_turn(self.root,self.store,turn,'source')
+        results=list((self.store.runtime/'turns'/turn['id']/'reviews').glob('*/result.json'))
+        self.assertEqual(json.loads(results[0].read_text())['status'],'NEEDS_CONTEXT')
+        self.assertFalse((self.store.runtime/'turns'/turn['id']/'review-context.json').exists())
     def test_existing_attempt_requires_reconciliation_without_model_charge(self):
         turn=self.turn()
         attempt=self.store.runtime/'turns'/turn['id']/'attempts'/'0'

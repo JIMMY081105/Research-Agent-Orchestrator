@@ -21,6 +21,8 @@ Your current owned workspace is the writable task directory. Code writes are lim
 Read C:\\Users\\User\\.claude\\INFRA.md before server/SSH work. Do not expose credentials, read auth/token files, change global authentication/billing, stop or restart old jobs, or infer dead processes from timeouts. Check existing job/process/checkpoint identities before scheduling new research work.
 Do not invoke Codex, Claude, other AI agents or API endpoints recursively. An independent Claude review is performed by the host after this turn. Do not claim that you already passed that review. Do not push, create GitHub content, merge, start GPU work, or change VPN/scheduled tasks merely because Full Access is selected; task authorization still applies.
 Keep final reports honest. State actual artifacts, checks and remaining gaps. Never publish hidden reasoning or credentials. Keep generated state out of Git.
+Prepare a concise reviewer handoff in the owned workspace: exact changes, necessary source/contracts, actual checks, fixed input/content hashes and unresolved issues. Do not copy an unrelated whole repository or raw model logs. External results without supplied evidence stay unverified.
+When the user requests host-managed GitHub result delivery, create REPORT.md and the optional literal artifact catalog in this workspace. The host owns that publication stage; do not invoke GitHub write tools or publish the package yourself.
 After substantive actions append a factual summary through the existing F:\\Personal Data\\_archive_system\\ai_archive.py annotate tool as required by the user's standing archive rules; use platform OpenAI Codex. Do not alter existing archives.
 """
 
@@ -46,6 +48,7 @@ class Service:
         self.heartbeat_lock = threading.Lock()
         self.last_heartbeat = 0.0
         self.failure_details = None
+        self.heartbeat_write_failures = 0
 
     def recover(self):
         path = safe_path(self.store.runtime / "process.json")
@@ -95,12 +98,21 @@ class Service:
         with self.heartbeat_lock:
             if state == 'RUNNING' and time.monotonic() - self.last_heartbeat < 3:
                 return
-            save(self.store.runtime / "service.json", {"owner": OWNER, "pid": os.getpid(), "birth": winproc.identity(os.getpid()),
+            record = {"owner": OWNER, "pid": os.getpid(), "birth": winproc.identity(os.getpid()),
                  "parent_pid": os.getppid(), "state": state, "reason": reason, "observed_at": utc(),
                  "started_at": self.started_at, "trigger": self.trigger, "source_sha256": self.source_sha,
                  "models": self.models, "default_model": self.default_model, 'failure_details': self.failure_details,
-                 "skills": [{k: v for k, v in s.items() if k != "path"} for s in self.skills]})
+                 "skills": [{k: v for k, v in s.items() if k != "path"} for s in self.skills],
+                 'heartbeat_write_failures':self.heartbeat_write_failures}
+            try:save(self.store.runtime / "service.json", record)
+            except OSError as error:
+                if getattr(error,'winerror',None) not in (5,32,33):raise
+                # A locked telemetry file must not tear down the owned RPC
+                # process. Keep its old freshness; never replay a model turn.
+                self.heartbeat_write_failures+=1
+                return False
             self.last_heartbeat = time.monotonic()
+            return True
 
     def next_turn(self):
         with self.store.db(True) as db:

@@ -73,5 +73,38 @@ class RecoveryTests(unittest.TestCase):
             for server in (redirect, trap): server.shutdown(); server.server_close()
             for thread in threads: thread.join(2)
 
+class UISessionKeyTests(unittest.TestCase):
+    def test_generated_key_survives_reload_encrypted_outside_repository(self):
+        from researchops.desktop_recovery import ui_session_key
+        with tempfile.TemporaryDirectory() as folder:
+            path=Path(folder)/'state/key.dpapi'
+            first=ui_session_key(path=path)
+            self.assertEqual(first,ui_session_key(path=path))
+            self.assertNotIn(first,path.read_bytes())
+    def test_existing_in_memory_key_migrates_without_changing_it(self):
+        from researchops.desktop_recovery import ui_session_key
+        with tempfile.TemporaryDirectory() as folder:
+            path=Path(folder)/'key.dpapi';key=b'x'*32
+            self.assertEqual(ui_session_key(key,path),key)
+            self.assertEqual(ui_session_key(path=path),key)
+    def test_conflicting_key_is_not_overwritten(self):
+        from researchops.desktop_recovery import ui_session_key
+        with tempfile.TemporaryDirectory() as folder:
+            path=Path(folder)/'key.dpapi';ui_session_key(b'x'*32,path);before=path.read_bytes()
+            with self.assertRaisesRegex(ValueError,'CONFLICT'):ui_session_key(b'y'*32,path)
+            self.assertEqual(path.read_bytes(),before)
+    def test_key_never_written_into_a_repository(self):
+        from researchops.desktop_recovery import ui_session_key
+        with tempfile.TemporaryDirectory() as folder:
+            root=Path(folder);(root/'.git').mkdir();path=root/'runtime/key.dpapi'
+            with self.assertRaisesRegex(ValueError,'IN_REPOSITORY_FORBIDDEN'):ui_session_key(path=path)
+            self.assertFalse(path.exists())
+    def test_corrupted_key_has_no_silent_reset(self):
+        from researchops.desktop_recovery import ui_session_key
+        with tempfile.TemporaryDirectory() as folder:
+            path=Path(folder)/'key.dpapi';path.write_bytes(b'corrupt')
+            with self.assertRaisesRegex(ValueError,'DPAPI_FAILED'):ui_session_key(path=path)
+            self.assertEqual(path.read_bytes(),b'corrupt')
+
 if __name__ == '__main__':
     unittest.main()

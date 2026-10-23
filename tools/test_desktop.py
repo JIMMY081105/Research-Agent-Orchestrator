@@ -11,23 +11,25 @@ sys.dont_write_bytecode = True
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from researchops.desktop_bundle import source_manifest
+from researchops.delivery_agent import manifest as delivery_manifest
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', type=Path, required=True)
     args = parser.parse_args()
     before = source_manifest(ROOT)
+    delivery_before = delivery_manifest(ROOT)
     started = dt.datetime.now(dt.timezone.utc).isoformat()
     suite = unittest.TestSuite()
     for pattern in ('test_dashboard*.py', 'test_desktop*.py', 'test_worker*.py', 'test_mission*.py',
-                    'test_review*.py', 'test_token_usage.py', 'test_adapter_diagnostics.py'):
+                    'test_review*.py', 'test_token_usage.py', 'test_adapter_diagnostics.py', 'test_delivery_agent.py'):
         suite.addTests(unittest.defaultTestLoader.discover(str(ROOT / 'tests'), pattern=pattern))
     count = suite.countTestCases()
     output = io.StringIO()
     result = unittest.TextTestRunner(stream=output, verbosity=2).run(suite)
-    unchanged = before == source_manifest(ROOT)
+    unchanged = before == source_manifest(ROOT) and delivery_before == delivery_manifest(ROOT)
     record = dict(started_at=started, completed_at=dt.datetime.now(dt.timezone.utc).isoformat(),
-                  source_sha256=before['sha256'], source_unchanged=unchanged, discovered=count,
+                  source_sha256=before['sha256'], delivery_source_sha256=delivery_before['sha256'], source_unchanged=unchanged, discovered=count,
                   tests_run=result.testsRun, success=result.wasSuccessful() and unchanged,
                   failures=[str(t) for t, _ in result.failures], errors=[str(t) for t, _ in result.errors],
                   skipped=[str(t) for t, _ in result.skipped], scope='COMPLETE_UI_AND_DESKTOP_REGRESSION_NO_MODELS_OR_REMOTE_CALLS')

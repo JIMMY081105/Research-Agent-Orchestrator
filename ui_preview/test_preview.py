@@ -6,7 +6,7 @@ from app import create_app
 
 class PreviewTests(unittest.TestCase):
     def setUp(self):
-        self.client=create_app().test_client()
+        self.client=create_app(testing=True).test_client()
     def test_templates_and_fragments_render(self):
         for path in ('/','/view/prompt','/view/progress','/view/progress?scenario=approval','/view/progress?scenario=blocked'):
             with self.subTest(path=path): self.assertEqual(200,self.client.get(path).status_code)

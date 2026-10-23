@@ -35,7 +35,13 @@ SOURCE_FILES = dashboard_bundle.FILES + (
     "ui_preview/static/vendor/htmx.min.js", "ui_preview/static/vendor/provenance.json",
     "ui_preview/static/vendor/HTMX-LICENSE.txt", "ui_preview/Start-Preview.ps1", "ui_preview/PreviewWindow.cs",
     "tools/deploy_execution.py",
+    "delivery_agent.py", "researchops/delivery_agent.py", "tests/test_delivery_agent.py",
+    "tools/delivery.ps1", "DELIVERY.md",
+    "ui_preview/test_preview.py",
+    "ui_preview/test_navigation.cjs",
 )
+PIPELINE_SOURCE_ADDITIONS = frozenset(("delivery_agent.py", "researchops/delivery_agent.py",
+                                     "tests/test_delivery_agent.py", "tools/delivery.ps1", "DELIVERY.md", "ui_preview/test_preview.py", "ui_preview/test_navigation.cjs"))
 APP_FILES = (
     "SceneControl.exe", "Microsoft.Web.WebView2.Core.dll", "Microsoft.Web.WebView2.WinForms.dll",
     "WebView2Loader.dll", "SceneControl.ico", "SceneControlLauncher.exe",
@@ -179,9 +185,19 @@ def verify(bundle, expected):
     if type(expected) is not str or not _SHA.fullmatch(expected):
         raise ValueError("DESKTOP_HASH_REQUIRED")
     record = read_small_json(bundle / "manifest.json")
-    allowed = {"source/" + name for name in _sources()} | {"source/config/live.json", "build.json"}
-    allowed.update("source/assets/" + name for name in (*dashboard_bundle.AVATARS, *dashboard_bundle.AVATAR_VIDEOS))
-    allowed.update("app/" + name for name in APP_FILES)
+    current_names = _sources()
+    common = {"source/config/live.json", "build.json"}
+    common.update("source/assets/" + name for name in (*dashboard_bundle.AVATARS, *dashboard_bundle.AVATAR_VIDEOS))
+    common.update("app/" + name for name in APP_FILES)
+    # Existing accepted snapshots remain readable during a non-disruptive
+    # cutover. Freeze always uses the complete current schema; verification
+    # permits only these two exact file sets and still checks every byte/hash.
+    source_names = current_names
+    allowed = common | {"source/" + name for name in current_names}
+    legacy_names = tuple(n for n in current_names if n not in PIPELINE_SOURCE_ADDITIONS)
+    legacy_allowed = common | {"source/" + name for name in legacy_names}
+    if type(record.get('files')) is dict and set(record['files']) == legacy_allowed:
+        source_names, allowed = legacy_names, legacy_allowed
     if (type(record) is not dict or set(record) != {"owner", "source_sha256", "files", "sha256"}
             or record.get("owner") != OWNER or not _hashmap(record.get("files"), allowed)
             or record.get("sha256") != expected or digest(canonical(record["files"])) != expected):
@@ -192,7 +208,7 @@ def verify(bundle, expected):
         limit = 64 * 1024 * 1024 if name.startswith("app/") else 2 * 1024 * 1024
         if digest(_bytes(bundle / name, limit)) != sha:
             raise ValueError("DESKTOP_SNAPSHOT_CONTENT_CHANGED")
-    sources = {name: files["source/" + name] for name in _sources()}
+    sources = {name: files["source/" + name] for name in source_names}
     if record.get("source_sha256") != digest(canonical(sources)):
         raise ValueError("DESKTOP_SOURCE_BINDING_CHANGED")
     validate_config(read_small_json(bundle / "source/config/live.json"))

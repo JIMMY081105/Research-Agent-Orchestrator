@@ -1,6 +1,12 @@
 /* Actual queued turns; HTMX polling only reads state and never invokes a model. */
 function syncAnalysisPermission(){
   const analysis=document.querySelector('[name=channel]')?.value==='analysis';
+  const delivery=document.querySelector('[name=publish_result]');
+  if(delivery){
+    if(analysis&&!delivery.disabled){delivery.dataset.saved=String(delivery.checked);delivery.checked=false;}
+    if(!analysis&&delivery.disabled&&delivery.dataset.saved){delivery.checked=delivery.dataset.saved==='true';}
+    delivery.disabled=analysis||delivery.dataset.available!=='yes';
+  }
   const group=document.querySelector('[data-setting=permission]');if(!group)return;
   const input=group.querySelector('input'),button=group.querySelector('button');
   if(analysis)input.value='Approval needed';

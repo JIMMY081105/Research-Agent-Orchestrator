@@ -1,8 +1,6 @@
-"""Bounded task evidence; every omission is explicit and oversize never calls a model."""
+"""Fixed task evidence, full required content once, without a 24 KiB call gate."""
 import difflib
-from .worker_store import WorkerError, canonical, sha
-
-MAX_PACKET_BYTES = 24576
+from .worker_store import canonical, sha
 
 
 def packet(turn, source_sha, snapshot, previous=None):
@@ -14,8 +12,9 @@ def packet(turn, source_sha, snapshot, previous=None):
     # and all unchanged source in the bounded packet so the review is complete.
     changes = []
     for name in changed:
-        if previous is None:
-            # There is no prior source on the first review. A full addition
+        if name not in old_files and name in snapshot['files']:
+            # There is no prior source for a new file, including after REWORK.
+            # A full addition
             # diff would duplicate the exact complete content already carried
             # in workspace.contents. Bind the addition and refer to that copy.
             changes.append({'path': name, 'change': 'added',
@@ -33,6 +32,4 @@ def packet(turn, source_sha, snapshot, previous=None):
                  external_evidence_verified=False)
     value['binding_sha256'] = sha(canonical(value))
     size = len(canonical(value))
-    if size > MAX_PACKET_BYTES:
-        raise WorkerError('REVIEW_CONTEXT_LIMIT_NEEDS_CONTEXT')
     return value, size

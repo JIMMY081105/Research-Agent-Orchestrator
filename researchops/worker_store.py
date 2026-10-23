@@ -143,11 +143,13 @@ class Store:
             return {}
 
     def capability(self):
+        from .desktop_recovery import preserve_running_ui_session
+        ui_session_migration=preserve_running_ui_session()
         service = self._service()
         paused = any(safe_path(self.runtime / name).exists() for name in ('admission-paused.json', 'review-pause.json', 'stop-when-idle.json'))
         if paused:
             service = {}
-        return {"enabled": bool(service), "owner": OWNER, "reason": None if service else "WORKER_SERVICE_UNAVAILABLE",
+        return {"enabled": bool(service), "owner": OWNER, "ui_session_migration":ui_session_migration,"reason": None if service else "WORKER_SERVICE_UNAVAILABLE",
                 "modes": list(MODES), "default_mode": "approval", "prompt_chars": 20000,
                 "skills": service.get("skills", []), "models": service.get("models", []),
                 "default_model": service.get("default_model"), "source_sha256": service.get("source_sha256"),

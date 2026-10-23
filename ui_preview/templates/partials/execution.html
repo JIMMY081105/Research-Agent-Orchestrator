@@ -1,5 +1,5 @@
 {% set turn=status.turns[0] if status.turns else none %}
-<section id="live-execution" class="live-execution"{% if turn and turn.state in ['QUEUED','STARTING','RUNNING','WAITING_APPROVAL','WAITING_INPUT','REVIEWING','CANCELLING'] %} hx-get="/execution/status/{{ task.session }}" hx-trigger="every 2s" hx-target="this" hx-swap="outerHTML"{% endif %}>
+<section id="live-execution" class="live-execution"{% if turn and (turn.state in ['QUEUED','STARTING','RUNNING','WAITING_APPROVAL','WAITING_INPUT','REVIEWING','CANCELLING','WAITING_TOOL_EXIT'] or (status.delivery and status.delivery.state in ['WAITING_REVIEW','PREPARING','PREPARED','PUBLISHING'])) %} hx-get="/execution/status/{{ task.session }}" hx-trigger="every 2s" hx-target="this" hx-swap="outerHTML"{% endif %}>
   {% if turn %}<article class="bubble user">{{ turn.prompt }}</article>
   <article class="bubble assistant"><small>真实任务 {{ turn.id }} · 修复 {{ turn.reworks }}/2</small><p><b>{{ turn.state }}</b>{% if turn.reason %} · {{ turn.reason }}{% endif %}</p><div class="live-answer">{{ turn.response or '已登记，等待执行进度…' }}</div></article>
   {% for approval in status.approvals %}<form hx-post="/execution/decision" hx-target="#live-execution" hx-swap="outerHTML" class="bubble assistant">
@@ -9,6 +9,7 @@
   </form>{% endfor %}
   <details><summary>公开执行记录 · {{ status.events|length }} 条</summary>{% for event in status.events %}<p><small>{{ event.kind }}</small> {{ event.body }}</p>{% endfor %}</details>
   {% if status.review_summary %}<p>Claude：{{ status.review_summary.status }} · 审核包 {{ status.review_summary.packet_bytes }} B · {{ status.review_summary.token_usage or 'token 尚无回执' }}</p>{% endif %}
+  {% if status.delivery %}<p>GitHub：{{ status.delivery.state }}{% if status.delivery.reason %} · {{ status.delivery.reason }}{% endif %}{% if status.delivery.url %} · <a href="{{ status.delivery.url }}" target="_blank" rel="noopener noreferrer">查看本轮 Draft PR</a>{% endif %}{% if status.delivery.archive_status and status.delivery.archive_status!='APPENDED' %} · 归档待处理{% endif %}</p>{% endif %}
   {% if turn and turn.state in ['QUEUED','STARTING','RUNNING','WAITING_APPROVAL','WAITING_INPUT'] %}<form hx-post="/execution/cancel" hx-target="#live-execution" hx-swap="outerHTML"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="id" value="{{ turn.id }}"><input type="hidden" name="session" value="{{ task.session }}"><button>停止本轮</button></form>{% endif %}
   <input type="hidden" id="next-worker-session" value="{{ task.session }}">
   <input type="hidden" id="next-worker-request" value="{{ request_id }}">

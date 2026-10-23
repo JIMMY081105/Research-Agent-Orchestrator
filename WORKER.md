@@ -55,10 +55,17 @@ one charged Codex invocation; internal model/tool iterations are not represented
 separate CLI calls by this local ledger.
 
 After completion, a fresh tool-disabled Claude reviews the exact prompt, visible
-final response and bounded local workspace manifest/content. **REVIEW_PASS** applies
+final response and local task-workspace manifest/content. **REVIEW_PASS** applies
 to that workspace only. It does not certify external scripts, remote jobs, physics,
 navigation, image semantics or scientific READY. Missing/oversized/changed evidence
-remains unverified. A review failure requests rework; it does not silently create an
+remains unverified. The user removed the arbitrary 24 KiB review-packet gate:
+required content is preserved, new-file additions are included once even after
+REWORK, and the three fixed review skills direct review to changes and necessary
+context instead of a repository scan. Fresh reviewers still receive necessary
+unchanged source and all prior findings; REWORK is never an approved baseline.
+`NEEDS_CONTEXT` records exact missing context and pauses without consuming a repair.
+File/credential checks, shared accounting and process safety still apply.
+A review failure requests rework; it does not silently create an
 unbounded repair loop. Auth/network/quota failures pause review without API fallback
 or automatic retry. The original analysis queue retains its own bounded repair flow.
 

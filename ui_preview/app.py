@@ -10,9 +10,15 @@ ROOT = Path(__file__).resolve().parent
 OWNER = 'BGV.SceneControl.UI.v1'
 
 
-def create_app():
+def create_app(testing=False):
     app = Flask(__name__, template_folder=str(ROOT/'templates'), static_folder=str(ROOT/'static'))
-    app.secret_key=secrets.token_bytes(32)
+    app.testing=testing
+    if testing:app.secret_key=secrets.token_bytes(32)
+    else:
+        import sys
+        sys.path.insert(0,str(ROOT.parent))
+        from researchops.desktop_recovery import ui_session_key
+        app.secret_key=ui_session_key()
     app.config.update(SESSION_COOKIE_SAMESITE='Strict',SESSION_COOKIE_HTTPONLY=True)
     app.config.update(MAX_CONTENT_LENGTH=32*1024, TEMPLATES_AUTO_RELOAD=True)
     options = dict(models=['GPT-6.1 Sol','GPT-6 Astra','GPT-6 Sol','GPT-6 Luna'],
@@ -44,7 +50,7 @@ def create_app():
         session.permanent=True
         request_id=str(uuid.uuid4())
         session['request_ids']=(session.get('request_ids',[])+[request_id])[-32:]
-        return dict(options=selected,connected=connected,worker=live,
+        return dict(options=selected,connected=connected,worker=live,delivery=execution.delivery_capability(),ui_revision=ROOT.parent.parent.name if ROOT.parent.name=='source' else 'development',
                     default_model=('gpt-6.1-sol' if 'gpt-6.1-sol' in live.get('models',[]) else live.get('default_model')) if connected else 'GPT-6.1 Sol',
                     request_id=request_id,current_session=session.get('worker_session',''),csrf=session['csrf'])
 
@@ -129,7 +135,7 @@ def create_app():
         return send_from_directory(ROOT.parent/'assets'/'avatars',name)
 
     @app.get('/preview-health')
-    def health(): return dict(owner=OWNER,ui_only=not execution.capability().get('enabled'),pid=os.getpid())
+    def health(): return dict(owner=OWNER,ui_only=not execution.capability().get('enabled'),pid=os.getpid(),ui_bundle_sha256=ROOT.parent.parent.name if ROOT.parent.name=='source' else 'development')
     return app
 
 
