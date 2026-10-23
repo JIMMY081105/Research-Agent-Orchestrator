@@ -114,6 +114,24 @@ class WorkerServiceTests(unittest.TestCase):
         self.assertEqual(self.store.status()['turns'][0]['state'], 'INTERRUPTED_NEEDS_RECONCILIATION')
         self.assertIsNone(self.service.next_turn())
 
+    def test_explicit_final_answer_is_reviewed_and_public_commentary_preserved(self):
+        turn=self.turn();self.begin(turn)
+        for ident,phase,text in [('c','commentary','Checking the files'),('f','final_answer','Actual result')]:
+            self.service.handle({'method':'item/completed','params':{'threadId':'owned','turnId':'native',
+                'item':{'type':'agentMessage','id':ident,'phase':phase,'text':text}}})
+        self.service.handle({'method':'turn/completed','params':{'threadId':'owned','turn':{'id':'native','status':'completed'}}})
+        self.assertEqual(self.review.call_args.args[2]['response'],'Actual result')
+        attempt=self.store.runtime/'turns'/turn['id']/'attempts'/'0'
+        messages=json.loads((attempt/'public-messages.json').read_text())['messages']
+        self.assertEqual([m['text'] for m in messages],['Checking the files','Actual result'])
+
+    def test_unknown_message_phase_retains_legacy_context_even_with_explicit_final(self):
+        self.service.message_text={'c':'known interim','u':'unknown phase','f':'final'}
+        self.service.message_phases={'c':'commentary','u':None,'f':'final_answer'}
+        self.assertEqual(self.service.review_response(),'unknown phase\nfinal')
+        self.service.message_phases['f']=None
+        self.assertEqual(self.service.review_response(),'known interim\nunknown phase\nfinal')
+
     def test_failed_native_turn_expires_approval_without_review(self):
         turn = self.turn(); self.begin(turn)
         self.service.handle({'id': 3, 'method': 'item/fileChange/requestApproval', 'params': {'threadId': 'owned', 'turnId': 'native'}})

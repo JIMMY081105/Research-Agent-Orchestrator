@@ -38,6 +38,7 @@ class Service:
         self.default_model = None
         self.active_turn = None
         self.message_text = {}
+        self.message_phases = {}
         self.stop = threading.Event()
         self.started_at = utc()
         self.heartbeat_lock = threading.Lock()
@@ -169,8 +170,16 @@ class Service:
         turn["last_tick"] = time.monotonic()
         self.active_turn = turn
         self.message_text = {}
+        self.message_phases = {}
         self.store.update(turn["id"], state="RUNNING", native_turn=turn["native_turn"])
         self.store.event(turn["session"], turn["id"], "STATUS", "Codex 已开始 · " + turn["mode"])
+
+    def review_response(self):
+        # Only an explicit native final_answer establishes finality. Unknown
+        # phases retain legacy behavior; never guess from wording or order.
+        has_final = 'final_answer' in self.message_phases.values()
+        return clean("\n".join(text for key, text in self.message_text.items()
+                              if not has_final or self.message_phases.get(key) != 'commentary'), 64000)
 
     def answer(self):
         if not self.active_turn:
@@ -242,7 +251,9 @@ class Service:
             elif kind == "fileChange":
                 self.store.event(turn["session"], turn["id"], "FILE_CHANGE", json.dumps({"changes": [{"path": c.get("path"), "kind": c.get("kind")} for c in item.get("changes", [])][:40], "status": item.get("status")}, ensure_ascii=False))
             elif kind == "agentMessage" and method == "item/completed":
-                self.message_text[item.get("id", "message")] = clean(item.get("text", ""), 64000)
+                key = item.get("id", "message")
+                self.message_text[key] = clean(item.get("text", ""), 64000)
+                self.message_phases[key] = item.get('phase')
                 self.store.update(turn["id"], response=clean("\n".join(self.message_text.values()), 64000))
         elif method == "serverRequest/resolved":
             with self.store.db() as db:
@@ -267,8 +278,13 @@ class Service:
                 if reason in ('QUOTA', 'AUTH', 'NETWORK'):
                     raise WorkerError('NATIVE_MODEL_PAUSED_' + reason)
                 return
-            turn["response"] = clean("\n".join(self.message_text.values()), 64000)
+            turn["response"] = self.review_response()
             attempt = self.store.runtime / 'turns' / turn['id'] / 'attempts' / str(turn.get('reworks', 0))
+            # Preserve all visible commentary separately from the terminal
+            # answer. No reasoning items enter this public-message record.
+            save(attempt / 'public-messages.json', {'messages': [
+                {'id': key, 'phase': self.message_phases.get(key), 'text': text}
+                for key, text in self.message_text.items()]})
             save(attempt / 'result.json', {'response': turn['response'], 'native_turn': turn['native_turn'], 'completed_at': utc()})
             self.store.update(turn["id"], state="REVIEWING", response=turn["response"])
             self.heartbeat()

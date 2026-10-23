@@ -14,6 +14,14 @@ def packet(turn, source_sha, snapshot, previous=None):
     # and all unchanged source in the bounded packet so the review is complete.
     changes = []
     for name in changed:
+        if previous is None:
+            # There is no prior source on the first review. A full addition
+            # diff would duplicate the exact complete content already carried
+            # in workspace.contents. Bind the addition and refer to that copy.
+            changes.append({'path': name, 'change': 'added',
+                            'after': snapshot['files'][name],
+                            'content_ref': 'workspace.contents' if name in snapshot['contents'] else None})
+            continue
         a, b = old.get('contents', {}).get(name, ''), snapshot['contents'].get(name, '')
         changes.append({'path': name, 'diff': ''.join(difflib.unified_diff(
             a.splitlines(True), b.splitlines(True), fromfile='before/'+name, tofile='after/'+name))})

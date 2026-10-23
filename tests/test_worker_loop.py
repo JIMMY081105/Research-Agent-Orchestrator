@@ -1,5 +1,6 @@
 """Actual failure boundaries of the bounded continuation and context controls."""
 import json
+import hashlib
 from pathlib import Path
 import tempfile
 import unittest
@@ -36,7 +37,8 @@ class ContextTests(unittest.TestCase):
         self.assertNotIn('-a=1',value['diff']);self.assertEqual(value['line_endings']['before_crlf'],2)
         self.assertNotEqual(value['before_sha256'],value['after_sha256'])
     def snapshot(self,text='value=1\n'):
-        return dict(files={'x.py':{'sha256':text}},contents={'x.py':text},sha256=text)
+        digest=hashlib.sha256(text.encode()).hexdigest()
+        return dict(files={'x.py':{'sha256':digest,'bytes':len(text.encode())}},contents={'x.py':text},sha256=digest)
     def test_complete_diff_and_unchanged_source_remain_bound(self):
         turn=dict(id='task',prompt='fix x',response='done')
         a,_=packet(turn,'source',self.snapshot())
@@ -47,6 +49,25 @@ class ContextTests(unittest.TestCase):
     def test_context_limit_fails_before_model_charge(self):
         with self.assertRaisesRegex(WorkerError,'CONTEXT_LIMIT'):
             packet(dict(id='x',prompt='x'*25000,response=''), 'source', self.snapshot())
+    def test_first_review_retains_complete_source_once_without_duplicate_addition_diff(self):
+        source=''.join('value_'+str(i)+'=42\n' for i in range(900))
+        value,size=packet(dict(id='x',prompt='Review this exact source',response='done'),'source',self.snapshot(source))
+        self.assertEqual(value['workspace']['contents']['x.py'],source)
+        self.assertLess(size,24576)
+        self.assertEqual(value['changes'][0]['content_ref'],'workspace.contents')
+        self.assertEqual(value['changes'][0]['after'],value['workspace']['files']['x.py'])
+        self.assertNotIn('diff',value['changes'][0])
+    def test_deduplication_does_not_bypass_oversize_actual_source(self):
+        with self.assertRaisesRegex(WorkerError,'CONTEXT_LIMIT'):
+            packet(dict(id='x',prompt='Review complete source',response=''),'source',self.snapshot('x'*25000))
+    def test_repair_keeps_deleted_source_diff_unchanged_source_and_prior_findings(self):
+        before=self.snapshot();before['files']['y.py']={'sha256':'unchanged'};before['contents']['y.py']='keep=1\n'
+        original,_=packet(dict(id='x',prompt='fix',response=''),'source',before)
+        after={'files':{'y.py':before['files']['y.py']},'contents':{'y.py':'keep=1\n'},'sha256':'new'}
+        value,_=packet(dict(id='x',prompt='fix',response=''),'source',after,{**original,'review':{'verdict':'REWORK','issues':['Must check deletion']}})
+        self.assertIn('-value=1',value['changes'][0]['diff'])
+        self.assertEqual(value['workspace']['contents']['y.py'],'keep=1\n')
+        self.assertEqual(value['previous_review']['issues'],['Must check deletion'])
     def test_sensitive_filename_refused_before_read(self):
         from researchops.worker_review import workspace_snapshot
         with tempfile.TemporaryDirectory() as d:
