@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN" data-page="{{ page }}"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="color-scheme" content="dark"><title>Scene Control · UI Preview</title>
+<meta name="color-scheme" content="dark"><title>Scene Control</title>
 <meta name="htmx-config" content='{"allowEval":false,"allowScriptTags":false,"selfRequestsOnly":true,"historyCacheSize":0,"includeIndicatorStyles":false}'>
 <link rel="stylesheet" href="{{ url_for('static',filename='style.css') }}">
 <script src="{{ url_for('static',filename='vendor/htmx.min.js') }}" defer></script>
@@ -22,7 +22,7 @@
   <header class="topbar">
     <h1 class="page-title" id="page-name">{{ page|capitalize }}</h1>
     <div class="gpu-chip" aria-label="示例 GPU：利用率42%，显存12.8 / 45.0 GiB，约28%"><span class="gpu-icon">▦</span><span>SQZ GPU</span><b>42<small>%</small></b><span class="gpu-memory" title="显存：已使用 / 总量"><span class="gpu-detail">12.8 / 45.0<small> GiB</small></span><span class="memory-percent">28%</span></span><span class="gpu-detail">51<small>°C</small></span><em>DEMO</em></div>
-    <span class="preview-badge">UI PREVIEW</span>
+    <span class="preview-badge">{{ '执行服务在线' if connected else '执行服务未就绪' }}</span>
   </header>
   <main id="workspace" class="workspace" aria-live="polite">{% include 'partials/'+page+'.html' %}</main>
 </div>

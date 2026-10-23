@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param([ValidateSet('Install','Open','Status','Restore')][string]$Mode='Status')
+param([ValidateSet('Install','Open','Status','Restore','Consolidate')][string]$Mode='Status')
 # Change only this application's shortcuts. The accepted orchestration service stays intact.
 $ErrorActionPreference='Stop'
 Import-Module (Join-Path $PSHOME 'Modules\Microsoft.PowerShell.Utility\Microsoft.PowerShell.Utility.psd1') -ErrorAction Stop
@@ -31,6 +31,30 @@ function Assert-NewLink($path){
 if($Mode -eq 'Open'){
     & $script -Desktop
     exit
+}
+if($Mode -eq 'Consolidate'){
+    # Retire only our known extra preview shortcut, retaining its exact bytes.
+    # Canonical Desktop/Start/taskbar entries and old installation backups remain.
+    foreach($path in $links){Assert-NewLink $path}
+    & $script -Desktop -PrepareOnly
+    $preview=Join-Path ([Environment]::GetFolderPath('DesktopDirectory')) 'Scene Control UI Preview.lnk'
+    $consolidation=Join-Path $state 'single-entry.json'
+    if(Test-Path -LiteralPath $preview){
+        $old=Read-Link $preview
+        $previewArguments='-NoProfile -NonInteractive -WindowStyle Hidden -File "'+$script+'"'
+        if($old.TargetPath -ine $powershell -or $old.Arguments -notin @($previewArguments,$arguments) -or $old.WorkingDirectory -ine $repo){throw 'Extra preview shortcut is not owned by this application'}
+        $backup=Join-Path $state ('single-entry-'+[Guid]::NewGuid().ToString('N'))
+        $backupFull=[IO.Path]::GetFullPath($backup)
+        $stateFull=[IO.Path]::GetFullPath($state)+'\'
+        if(-not $backupFull.StartsWith($stateFull,[StringComparison]::OrdinalIgnoreCase)){throw 'Shortcut backup outside owned runtime'}
+        New-Item -ItemType Directory -Path $backupFull|Out-Null
+        $destination=Join-Path $backupFull 'Scene Control UI Preview.lnk'
+        $hash=(Get-FileHash -LiteralPath $preview).Hash
+        Move-Item -LiteralPath $preview -Destination $destination
+        if((Get-FileHash -LiteralPath $destination).Hash -cne $hash){throw 'Preview shortcut preservation failed'}
+        @{owner=$owner;status='SINGLE_ENTRY';canonical=$links;retired_shortcut=$preview;backup=$destination;sha256=$hash;updated_utc=[DateTime]::UtcNow.ToString('o');backend_tasks_changed=$false}|ConvertTo-Json -Depth 5|Set-Content -LiteralPath $consolidation -Encoding utf8
+    }
+    if(Test-Path -LiteralPath $consolidation){Get-Content -LiteralPath $consolidation -Raw}
 }
 if($Mode -eq 'Install'){
     $pending=@($links)

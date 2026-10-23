@@ -1,4 +1,4 @@
-// Presentation-only WebView2 shell. No task/model bridge or production connection.
+// Single WebView2 presentation shell; model/task execution stays in the separate worker.
 using System;
 using System.IO;
 using System.Threading;
@@ -13,9 +13,9 @@ class PreviewWindow : Form
     [DllImport("user32.dll", CharSet=CharSet.Unicode)] static extern uint RegisterWindowMessage(string name);
     [DllImport("user32.dll")] static extern bool PostMessage(IntPtr window, uint message, IntPtr w, IntPtr l);
     readonly WebView2 web = new WebView2();
-    PreviewWindow(bool desktop)
+    PreviewWindow()
     {
-        Text = desktop ? "Scene Control" : "Scene Control · UI Preview";
+        Text = "Scene Control";
         WindowState = FormWindowState.Maximized;
         MinimumSize = new System.Drawing.Size(850,600);
         BackColor = System.Drawing.Color.FromArgb(11,17,27);
@@ -36,7 +36,7 @@ class PreviewWindow : Form
                     if (!Uri.TryCreate(e.Uri,UriKind.Absolute,out uri) || uri.Scheme!="http" || uri.Host!="127.0.0.1" || uri.Port!=8877) e.Cancel=true;
                 };
                 web.CoreWebView2.Navigate("http://127.0.0.1:8877/");
-            } catch(Exception) { MessageBox.Show("UI 预览未能连接。请重新运行 Start-Preview.ps1。",Text); Close(); }
+            } catch(Exception) { MessageBox.Show("Scene Control 未能连接本地界面，请从桌面入口重新打开。",Text); Close(); }
         };
     }
     protected override void WndProc(ref Message message)
@@ -49,14 +49,14 @@ class PreviewWindow : Form
     }
     [STAThread] static void Main(string[] args)
     {
-        bool desktop = Array.IndexOf(args,"--desktop") >= 0;
-        string identity = "ResearchAgentOrchestrator.ApprovedUI."+(desktop ? "Desktop" : "Preview");
+        // Historical preview/default/--desktop entry points share one window.
+        string identity = "ResearchAgentOrchestrator.ApprovedUI.Desktop";
         activateMessage = RegisterWindowMessage(identity+".Activate");
         bool first;
         using (var mutex = new Mutex(true,"Local\\"+identity,out first)) {
             if (!first) { PostMessage(new IntPtr(0xffff),activateMessage,IntPtr.Zero,IntPtr.Zero); return; }
             Application.EnableVisualStyles();
-            Application.Run(new PreviewWindow(desktop));
+            Application.Run(new PreviewWindow());
             mutex.ReleaseMutex();
         }
     }

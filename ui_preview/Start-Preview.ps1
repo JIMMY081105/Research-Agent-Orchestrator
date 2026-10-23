@@ -14,15 +14,15 @@ $repo=[IO.Path]::GetFullPath((Split-Path -Parent $PSScriptRoot))
 $state=Join-Path $repo '.runtime\ui-preview'
 $python=Join-Path $repo '.venv\Scripts\pythonw.exe'
 $appScript=Join-Path $PSScriptRoot 'app.py'
-$native=Join-Path $state 'native'
-$binary=Join-Path $native 'SceneControlPreview.exe'
-if($Desktop){$native=Join-Path $state 'desktop';$binary=Join-Path $native 'SceneControl.exe'}
+# One application for both historical invocations. -Desktop is retained only
+# for compatibility with existing shortcuts; omitting it cannot open a second UI.
+$native=Join-Path $state 'desktop'
+$binary=Join-Path $native 'SceneControl.exe'
 if(-not(Test-Path -LiteralPath $python)){throw 'Project preview environment missing. See ui_preview/README.md.'}
 New-Item -ItemType Directory -Path $native -Force | Out-Null
 $source=Join-Path $PSScriptRoot 'PreviewWindow.cs'
 $hash=(Get-FileHash -LiteralPath $source).Hash
-$receipt=Join-Path $state 'build.json'
-if($Desktop){$receipt=Join-Path $state 'build-desktop.json'}
+$receipt=Join-Path $state 'build-desktop.json'
 $built=$null
 if(Test-Path -LiteralPath $receipt){$built=Get-Content -LiteralPath $receipt -Raw|ConvertFrom-Json}
 if(-not(Test-Path -LiteralPath $binary) -or $null -eq $built -or $built.source -cne $hash -or $built.binary -cne (Get-FileHash -LiteralPath $binary).Hash){
@@ -55,7 +55,6 @@ if(-not $health){
     for($i=0;$i -lt 30;$i++){$health=Preview-Health;if($health){break};Start-Sleep -Milliseconds 150}
 }
 if(-not $health -or $health.owner -cne 'ResearchAgentOrchestrator.UI.Preview' -or $health.ui_only -notin @($true,$false)){throw 'UI service did not become ready'}
-if($Desktop){Start-Process -FilePath $binary -ArgumentList '--desktop' -WorkingDirectory $native}
-else{Start-Process -FilePath $binary -WorkingDirectory $native}
-Write-Output ('UI-only native preview opened. '+$binary)
+Start-Process -FilePath $binary -ArgumentList '--desktop' -WorkingDirectory $native
+Write-Output ('Scene Control opened. '+$binary)
 } finally {if($acquired){$startupLock.ReleaseMutex()};$startupLock.Dispose();$env:PSModulePath=$previousModulePath}
