@@ -1,6 +1,6 @@
 # Bounded execution integration
 
-This candidate connects the approved Flask/Jinja/HTMX chat layout to the separate owned Codex worker. It has not passed the independent source/deployment gate and must not be presented as DEPLOYED.
+The approved Flask/Jinja/HTMX chat layout is connected to the accepted separately owned Codex worker. Bounded local Task/Standard execution is deployed as of 2026-10-23; this does not certify autonomous research, GPU dispatch or scientific acceptance.
 
 ## Behavior
 
@@ -22,6 +22,8 @@ The UI requires same-origin loopback requests, signed browser ownership, a CSRF 
 
 Use a fixed source manifest, complete passing tests and a matching independent PASS before freezing. `tools/deploy_execution.py freeze` refuses a stale/missing PASS. Only then may the frozen `tools/worker.ps1 -Mode Install` register the independently named current-user task. Do not use an edited checkout as the running worker snapshot.
 
-The frozen worker exposes Status, Disable, Enable, StopWhenIdle and Uninstall modes. Disable pauses new admissions and disables only its own task; active work is preserved. Enable retains historical pause records. No accepted native worker is installed by this candidate yet, so these commands are not a claim that execution is currently available in the desktop.
+The frozen worker exposes Status, Disable, Enable, StopWhenIdle and Uninstall modes. Disable pauses new admissions and disables only its own task; active work is preserved. Enable retains historical pause records. Resolve `source` from `E:\Github\Building-Generation-Validation\.runtime\worker\activation.json`, then invoke that source's `tools\worker.ps1 -Mode Status`, `Disable` or `Enable`. Uninstall refuses a running worker; use StopWhenIdle and verify ownership/state before uninstalling only this task.
+
+The current immutable worker bundle is `e8ca7a2e16f73c098a4f2d574ec0edfa90df10f524d41f0571600f2edfd8a0be`. Its source manifest passed 288 regressions and independent audit-7 closure PASS against the previous full audit's three findings. Later frontend branding/readiness changes are separately tested and explicitly exempt from Claude frontend review; they do not alter the running worker snapshot. Real desktop submission, installed REWORK/repair/PASS, natural scheduler startup and Disable/Enable receipts are retained privately in `.runtime/ui-connection-20261023`. Earlier failed tests/reviews remain retained.
 
 GitHub software changes belong in Research-Agent-Orchestrator. Selected private research/review reports belong in Building-Generation-Validation. A Draft PR is for user review; nothing merges automatically. Private runtime, raw histories, credentials and complete CLI outputs are excluded.

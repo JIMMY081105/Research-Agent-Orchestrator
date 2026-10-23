@@ -26,7 +26,12 @@
     document.documentElement.dataset.page = page;
     q('#page-name').textContent = page === 'prompt' ? 'Prompt' : 'Progress';
     document.querySelectorAll('[data-nav]').forEach(e => e.setAttribute('aria-current', e.dataset.nav === page ? 'page' : 'false'));
-    document.querySelectorAll('[data-draft]').forEach(e => { if (draft.has(e.name)) e.value = draft.get(e.name); });
+    document.querySelectorAll('[data-draft]').forEach(e => {
+      if (!draft.has(e.name)) return;
+      const group=e.closest('[data-setting]'),value=draft.get(e.name);
+      if(group&&!Array.from(group.querySelectorAll('[data-option]')).some(o=>o.dataset.option===value)){draft.set(e.name,e.value);return;}
+      e.value=value;
+    });
     syncPickers();
     motion();
   }
@@ -88,5 +93,26 @@
   };
   reduced.addEventListener('change',motion);
   document.addEventListener('visibilitychange',motion);
+  let checkingReadiness=false;
+  async function checkReadiness(){
+    if(checkingReadiness||document.hidden)return;checkingReadiness=true;
+    try{
+      const response=await fetch('/preview-health',{cache:'no-store'});if(!response.ok)return;
+      const state=await response.json();if(state.owner!=='BGV.SceneControl.UI.v1'||typeof state.ui_only!=='boolean')return;
+      const online=!state.ui_only,previous=document.documentElement.dataset.worker==='online';if(online===previous)return;
+      document.documentElement.dataset.worker=online?'online':'offline';
+      q('#worker-status-label').textContent=online?'WORKER ONLINE':'WORKER OFFLINE';
+      q('#worker-status-copy').textContent=online?'真实 Codex 执行 · Claude 审核':'执行服务未就绪或已暂停，输入已保留';
+      q('#worker-badge').textContent=online?'执行服务在线':'执行服务未就绪或暂停';
+      const send=q('#prompt-form .send');if(send)send.disabled=!online;
+      // Preserve an active task and its approvals. A composer-only reconnect
+      // refreshes actual CLI choices through HTMX; beforeSwap retains the draft.
+      if(!q('#live-execution')){
+        const page=q('[data-view]')?.dataset.view||'prompt';remember();
+        await htmx.ajax('GET','/view/'+page,{target:'#workspace',swap:'innerHTML'});
+      }
+    }catch(_){}finally{checkingReadiness=false;}
+  }
+  setInterval(checkReadiness,3000);
   refresh();
 })();

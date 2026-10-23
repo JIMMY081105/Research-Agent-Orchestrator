@@ -11,13 +11,14 @@ try {
 try {$acquired=$startupLock.WaitOne(20000)} catch [Threading.AbandonedMutexException] {$acquired=$true}
 if(-not $acquired){throw 'Another Scene Control startup is still in progress'}
 $repo=[IO.Path]::GetFullPath((Split-Path -Parent $PSScriptRoot))
-$state=Join-Path $repo '.runtime\ui-preview'
+$state=Join-Path $repo '.runtime\desktop-ui'
 $python=Join-Path $repo '.venv\Scripts\pythonw.exe'
 $appScript=Join-Path $PSScriptRoot 'app.py'
 # One application for both historical invocations. -Desktop is retained only
 # for compatibility with existing shortcuts; omitting it cannot open a second UI.
-$native=Join-Path $state 'desktop'
-$binary=Join-Path $native 'SceneControl.exe'
+$native=Join-Path $state 'app'
+$binary=Join-Path $native 'BGVSceneControl.exe'
+$icon=Join-Path $native 'SceneControl.ico'
 if(-not(Test-Path -LiteralPath $python)){throw 'Project preview environment missing. See ui_preview/README.md.'}
 New-Item -ItemType Directory -Path $native -Force | Out-Null
 $source=Join-Path $PSScriptRoot 'PreviewWindow.cs'
@@ -31,30 +32,34 @@ if(-not(Test-Path -LiteralPath $binary) -or $null -eq $built -or $built.source -
     $activation=Get-Content -LiteralPath (Join-Path $dependencyRoot 'activation.json') -Raw|ConvertFrom-Json
     if($activation.owner -cne 'BGV.Windows.SceneControl.Desktop.v1' -or $activation.sha256 -notmatch '^[0-9a-f]{64}$'){throw 'Desktop dependency identity unavailable'}
     $dependencies=Join-Path $dependencyRoot ('snapshots\'+$activation.sha256+'\app')
+    $acceptedManifest=Get-Content -LiteralPath (Join-Path (Split-Path -Parent $dependencies) 'manifest.json') -Raw|ConvertFrom-Json
+    $iconSource=Join-Path $dependencies 'SceneControl.ico'
+    if((Get-FileHash -LiteralPath $iconSource).Hash.ToLowerInvariant() -cne $acceptedManifest.files.'app/SceneControl.ico'){throw 'Accepted BGV icon identity changed'}
+    Copy-Item -LiteralPath $iconSource -Destination $icon -Force
     $pins=Get-Content -LiteralPath (Join-Path $repo 'config\desktop-dependencies.json') -Raw|ConvertFrom-Json
     foreach($file in @('Microsoft.Web.WebView2.Core.dll','Microsoft.Web.WebView2.WinForms.dll','WebView2Loader.dll')){
         if((Get-FileHash -LiteralPath (Join-Path $dependencies $file)).Hash.ToLowerInvariant() -cne $pins.files.$file){throw 'Pinned WebView2 dependency changed'}
         Copy-Item -LiteralPath (Join-Path $dependencies $file) -Destination (Join-Path $native $file) -Force
     }
     $compiler='C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe'
-    & $compiler /nologo /target:winexe /platform:x64 /langversion:5 /optimize+ "/out:$binary" "/win32manifest:$(Join-Path $repo 'native\SceneControl.manifest')" /reference:System.dll /reference:System.Drawing.dll /reference:System.Windows.Forms.dll "/reference:$(Join-Path $native 'Microsoft.Web.WebView2.Core.dll')" "/reference:$(Join-Path $native 'Microsoft.Web.WebView2.WinForms.dll')" $source
+    & $compiler /nologo /target:winexe /platform:x64 /langversion:5 /optimize+ "/out:$binary" "/win32icon:$icon" "/win32manifest:$(Join-Path $repo 'native\SceneControl.manifest')" /reference:System.dll /reference:System.Drawing.dll /reference:System.Windows.Forms.dll "/reference:$(Join-Path $native 'Microsoft.Web.WebView2.Core.dll')" "/reference:$(Join-Path $native 'Microsoft.Web.WebView2.WinForms.dll')" $source
     if($LASTEXITCODE -ne 0){throw 'Preview shell build failed'}
     @{source=$hash;binary=(Get-FileHash -LiteralPath $binary).Hash;owner='ResearchAgentOrchestrator.UI.Preview'}|ConvertTo-Json|Set-Content -LiteralPath $receipt -Encoding utf8
 }
 if($PrepareOnly){Write-Output ('Prepared Scene Control UI: '+$binary);return}
 function Preview-Health {
-    try { return Invoke-RestMethod 'http://127.0.0.1:8877/preview-health' -TimeoutSec 2 -UseBasicParsing } catch { return $null }
+    try { return Invoke-RestMethod 'http://127.0.0.1:8878/preview-health' -TimeoutSec 2 -UseBasicParsing } catch { return $null }
 }
 $health=Preview-Health
-if($health -and ($health.owner -cne 'ResearchAgentOrchestrator.UI.Preview' -or $health.ui_only -notin @($true,$false))){throw 'Port 8877 belongs to another application'}
+if($health -and ($health.owner -cne 'BGV.SceneControl.UI.v1' -or $health.ui_only -notin @($true,$false))){throw 'Port 8878 belongs to another application'}
 if(-not $health){
-    $listener=Get-NetTCPConnection -LocalPort 8877 -State Listen -ErrorAction SilentlyContinue
+    $listener=Get-NetTCPConnection -LocalPort 8878 -State Listen -ErrorAction SilentlyContinue
     if($listener){throw 'Preview port is already occupied; nothing stopped'}
     $process=Start-Process -FilePath $python -ArgumentList @('-B',('"'+$appScript+'"')) -WorkingDirectory $repo -WindowStyle Hidden -PassThru
     @{owner='ResearchAgentOrchestrator.UI.Preview';pid=$process.Id;started_utc=(Get-Date).ToUniversalTime().ToString('o')}|ConvertTo-Json|Set-Content -LiteralPath (Join-Path $state 'server.json') -Encoding utf8
     for($i=0;$i -lt 30;$i++){$health=Preview-Health;if($health){break};Start-Sleep -Milliseconds 150}
 }
-if(-not $health -or $health.owner -cne 'ResearchAgentOrchestrator.UI.Preview' -or $health.ui_only -notin @($true,$false)){throw 'UI service did not become ready'}
+if(-not $health -or $health.owner -cne 'BGV.SceneControl.UI.v1' -or $health.ui_only -notin @($true,$false)){throw 'UI service did not become ready'}
 Start-Process -FilePath $binary -ArgumentList '--desktop' -WorkingDirectory $native
 Write-Output ('Scene Control opened. '+$binary)
 } finally {if($acquired){$startupLock.ReleaseMutex()};$startupLock.Dispose();$env:PSModulePath=$previousModulePath}

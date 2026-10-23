@@ -1,10 +1,10 @@
 # Research Agent Orchestrator
 
-**Status: PARTIAL — the new execution integration is a candidate and has not been installed as an accepted worker.**
+**Status: DEPLOYED for bounded local Codex → Claude Task/Standard execution (2026-10-23). Research automation remains separately gated.**
 
-The approved cyberpunk desktop layout now has a Flask + Jinja2 + HTMX execution interface in source: Prompt for explicit tasks or read-only text analysis, Progress for actual owned turn/review records, and native Approval needed / Full Access profiles. The compact GPU chip in this new layout is still demonstration data. Without a verified enabled worker, task submission stays disabled.
+Open **BGV Scene Control** from Desktop or Start. The single native BGV window uses the approved cyberpunk Flask + Jinja2 + HTMX layout: Prompt for explicit tasks or read-only text analysis, Progress for owned turn/review records, and native Approval needed / Full Access profiles. It reconnects to the verified worker automatically, preserving the composer during readiness changes. The compact GPU chip remains demonstration data. Without an enabled verified worker, sending is disabled.
 
-A finite development test has exercised real Codex execution → tool-disabled Claude REWORK → automatic correction → fresh Claude PASS. An injected wrong artifact was explicitly detected, then independently read back after repair. This is not installed UI acceptance or a natural scheduler receipt. Independent source review still returned REWORK, so activation remains blocked. Full local receipts and histories are not committed here.
+Acceptance includes 288 regressions, 12 UI tests, real native permission boundary probes, independent tool-disabled source-review closure PASS, an actual desktop submission returning 42 with Claude PASS, and an installed-worker negative control: wrong artifact 41 → Claude REWORK → Codex repair → fresh Claude PASS → host readback 42. Windows naturally started the fixed worker at 00:37:02 UTC; Disable/Enable rejected new admissions without restarting its active process. Full local evidence and old failed records remain private.
 
 Reviews use complete bounded differences and necessary source context, a single provider turn with strict local JSON/binding validation, and provider-reported token counters. No blanket token-saving percentage is claimed. [Integration behavior and remaining gates](EXECUTION-INTEGRATION.md) · [UI source and launch instructions](ui_preview/README.md).
 
@@ -29,15 +29,15 @@ a building, or authorize research changes.
 
 ## Desktop and execution
 
-- **Prompt:** bottom composer, reference material, actual supported model/effort selection and native permission profiles. Task/Standard is connected in the candidate; Plan/Goal/Fast are not accepted execution modes.
+- **Prompt:** bottom composer, reference material, actual supported model/effort selection and native permission profiles. Task/Standard is connected; Plan/Goal/Fast are not accepted execution modes.
 - **Progress:** per-browser owned sessions, public events, explicit approval requests and actual review results; idle refreshes make no model calls.
 - **Text analysis:** always a fresh native read-only session. It cannot inherit an existing write-capable session.
 - **Corrections:** at most two repairs using concrete independent findings, preserving the original input and every attempt. Crashes or uncertain starts require reconciliation rather than replay.
 - **Boundaries:** Full Access intentionally removes OS directory confinement and command approval for the selected turn; task authorization still governs research, GPU and publication. Approval mode retains native restrictions. The shared daily review cap is 50; charges and failures are retained.
 
-The Desktop/Start/taskbar Scene Control entry opens the approved layout. The candidate backend is deliberately not activated while its independent source gate remains unpassed. Existing observer/legacy desktop services are separate and unchanged. See [EXECUTION-INTEGRATION.md](EXECUTION-INTEGRATION.md), [WORKER.md](WORKER.md), [POLICY.md](POLICY.md) and [OPERATIONS.md](OPERATIONS.md).
+Desktop, Start and the existing taskbar entry open the same **BGV Scene Control** window. The separately installed worker executes immutable snapshot `e8ca7a2e16f73c098a4f2d574ec0edfa90df10f524d41f0571600f2edfd8a0be`; subsequent frontend-only reconnect/branding changes use the user's UI-review exemption. Existing observer/legacy desktop services remain unchanged. See [EXECUTION-INTEGRATION.md](EXECUTION-INTEGRATION.md), [WORKER.md](WORKER.md), [POLICY.md](POLICY.md) and [OPERATIONS.md](OPERATIONS.md).
 
-The following sections describe the separate existing bounded controller and earlier integration contracts; they do not certify this candidate or grant a research goal.
+The following sections describe the separate bounded controller and earlier integration contracts; they do not grant a research goal.
 
 ## Bounded controller and integration details
 

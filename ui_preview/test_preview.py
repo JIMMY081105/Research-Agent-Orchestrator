@@ -1,5 +1,6 @@
 """The UI renderer must not expose execution or render submitted HTML as code."""
 import unittest
+from unittest.mock import patch
 from app import create_app
 
 
@@ -26,9 +27,10 @@ class PreviewTests(unittest.TestCase):
     def test_local_assets_and_preview_identity(self):
         with self.client.get('/static/vendor/htmx.min.js') as response:
             self.assertEqual(200,response.status_code)
-        health=self.client.get('/preview-health').json
+        with patch('execution.capability',return_value={'enabled':False}):
+            health=self.client.get('/preview-health').json
         self.assertTrue(health['ui_only'])
-        self.assertEqual(health['owner'],'ResearchAgentOrchestrator.UI.Preview')
+        self.assertEqual(health['owner'],'BGV.SceneControl.UI.v1')
 
 
 if __name__=='__main__':unittest.main()

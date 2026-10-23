@@ -1,7 +1,7 @@
 <!doctype html>
-<html lang="zh-CN" data-page="{{ page }}"><head>
+<html lang="zh-CN" data-page="{{ page }}" data-worker="{{ 'online' if connected else 'offline' }}"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="color-scheme" content="dark"><title>Scene Control</title>
+<meta name="color-scheme" content="dark"><title>BGV Scene Control</title>
 <meta name="htmx-config" content='{"allowEval":false,"allowScriptTags":false,"selfRequestsOnly":true,"historyCacheSize":0,"includeIndicatorStyles":false}'>
 <link rel="stylesheet" href="{{ url_for('static',filename='style.css') }}">
 <script src="{{ url_for('static',filename='vendor/htmx.min.js') }}" defer></script>
@@ -9,20 +9,20 @@
 <script src="{{ url_for('static',filename='execution.js') }}" defer></script>
 </head><body>
 <aside class="sidebar">
-  <a href="/" class="brand"><span class="brand-icon">S</span><span>Scene Control<small>RESEARCH WORKSPACE</small></span></a>
+  <a href="/" class="brand"><span class="brand-icon">S</span><span>BGV Scene Control<small>RESEARCH WORKSPACE</small></span></a>
   <button class="nav new-chat" id="new-chat" hx-get="/view/prompt?new=1" hx-target="#workspace"><span class="nav-icon">＋</span><span>新对话</span></button>
   <a class="nav" data-nav="prompt" href="/?page=prompt" hx-get="/view/prompt" hx-target="#workspace"><span class="nav-icon">◧</span><span>Prompt</span></a>
   <a class="nav" data-nav="progress" href="/?page=progress" hx-get="/view/progress" hx-target="#workspace"><span class="nav-icon">≋</span><span>Progress</span></a>
   <div class="side-label">YOUR WORKSPACE</div>
   <p class="side-copy">从一个问题开始。<br>把计划变成可见的进展。</p>
   <div class="side-spacer"></div>
-  <div class="side-footer"><span class="preview-dot"></span> {{ 'WORKER ONLINE' if connected else 'WORKER OFFLINE' }}<small>{{ '真实 Codex 执行 · Claude 审核' if connected else '执行服务未就绪，发送不会启动任务' }}<br>GPU 卡片为排版示例</small><button id="motion-toggle" aria-pressed="false">◌ 动效开启</button></div>
+  <div class="side-footer"><span class="preview-dot"></span> <span id="worker-status-label">{{ 'WORKER ONLINE' if connected else 'WORKER OFFLINE' }}</span><small><span id="worker-status-copy">{{ '真实 Codex 执行 · Claude 审核' if connected else '执行服务未就绪，发送不会启动任务' }}</span><br>GPU 卡片为排版示例</small><button id="motion-toggle" aria-pressed="false">◌ 动效开启</button></div>
 </aside>
 <div class="app">
   <header class="topbar">
     <h1 class="page-title" id="page-name">{{ page|capitalize }}</h1>
     <div class="gpu-chip" aria-label="示例 GPU：利用率42%，显存12.8 / 45.0 GiB，约28%"><span class="gpu-icon">▦</span><span>SQZ GPU</span><b>42<small>%</small></b><span class="gpu-memory" title="显存：已使用 / 总量"><span class="gpu-detail">12.8 / 45.0<small> GiB</small></span><span class="memory-percent">28%</span></span><span class="gpu-detail">51<small>°C</small></span><em>DEMO</em></div>
-    <span class="preview-badge">{{ '执行服务在线' if connected else '执行服务未就绪' }}</span>
+    <span class="preview-badge" id="worker-badge">{{ '执行服务在线' if connected else '执行服务未就绪' }}</span>
   </header>
   <main id="workspace" class="workspace" aria-live="polite">{% include 'partials/'+page+'.html' %}</main>
 </div>
