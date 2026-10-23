@@ -1,29 +1,18 @@
 {% if current_session %}
-<section data-view="progress" class="progress-page" hx-get="/execution/progress/{{ current_session }}" hx-trigger="load" hx-swap="outerHTML">读取真实任务进度…</section>
-{% elif connected %}
-<section class="progress-page" data-view="progress"><header class="progress-heading"><div><p class="eyebrow">MISSION CONTROL / LIVE</p><h1>等待你的任务</h1><p>在 Prompt 页面提交任务后，这里会显示执行、审核与结果。</p></div></header></section>
+<section data-view="progress" class="progress-page" hx-get="/execution/progress/{{ current_session }}" hx-trigger="load" hx-target="this" hx-swap="outerHTML">读取真实任务进度…</section>
 {% else %}
-{% set steps=['接收任务','执行','独立审核','结果'] %}
-{% set phase=2 if scenario=='review' else 3 if scenario=='complete' else 1 %}
-<section class="progress-page" data-view="progress">
-  <header class="progress-heading"><div><p class="eyebrow">MISSION CONTROL / DEMO</p><h1>让每一步，都看得见。</h1><p>执行、交接、审核与结果。先确定你希望看到的信息。</p></div><span class="mission-id">SCENE–001 <span>示例任务</span></span></header>
-  <div class="scenario-bar"><span>预览状态</span>{% for id,title in [('running','执行中'),('review','审核中'),('approval','等待批准'),('blocked','Blocked'),('complete','已完成')] %}<button type="button" class="{{ 'selected' if scenario==id else '' }}" hx-get="/view/progress?scenario={{ id }}" hx-target="#workspace">{{ title }}</button>{% endfor %}</div>
-  <div class="pipeline">{% for label in steps %}<div class="pipeline-step {{ 'current' if loop.index0==phase else 'done' if loop.index0<phase else '' }}"><span class="step-dot">{{ '✓' if loop.index0<phase else '%02d'|format(loop.index) }}</span><span>{{ label }}</span></div>{% endfor %}</div>
+<section class="progress-page live-board" data-view="progress">
+  <header class="progress-heading"><div><p class="eyebrow">MISSION CONTROL</p><h1>{{ '等待你的任务' if connected else '等待连接执行服务' }}</h1><p>在 Prompt 提交任务，执行和审核阶段会显示在这里。</p></div></header>
   <div class="agents">
-    {% for agent,name,character in [('codex','Codex','david'),('claude','Claude','lucy')] %}
-    {% set working=(agent=='codex' and scenario=='running') or (agent=='claude' and scenario=='review') %}
-    <article class="agent {{ agent }} {{ 'working' if working else '' }}">
-      <header class="agent-top"><span><i class="agent-dot"></i>{{ name }}</span><span class="state-pill">{{ 'EXECUTING' if agent=='codex' and scenario=='running' else 'REVIEWING' if working else 'WAITING APPROVAL' if scenario=='approval' and agent=='codex' else 'BLOCKED' if scenario=='blocked' and agent=='codex' else 'COMPLETED' if scenario=='complete' else 'WAITING' }}</span></header>
-      <div class="agent-hero"><video src="{{ url_for('avatar',name=character+'.mp4') }}" autoplay muted loop playsinline preload="metadata" aria-label="{{ character }} 动态头像"></video><div><p class="agent-role">{{ 'EXECUTOR' if agent=='codex' else 'REVIEWER' }}</p><h2>{{ '正在推进任务' if working else '等待你的批准' if scenario=='approval' and agent=='codex' else '需要补充材料' if scenario=='blocked' and agent=='codex' else '阶段已完成' if scenario=='complete' else '等待交接' }}</h2><p class="muted">{{ '读取约束 → 检查资产 → 形成结果' if agent=='codex' else '检查证据 → 提出意见 → 返回结论' }}</p></div></div>
-      <dl class="specs"><div><dt>MODEL</dt><dd>{{ 'GPT-6.1 Sol' if agent=='codex' else 'Claude · 待配置' }}</dd></div><div><dt>INTELLIGENCE</dt><dd>{{ 'Extra high' if agent=='codex' else 'High' }}</dd></div><div><dt>PERMISSIONS</dt><dd>{{ 'Approval needed' if agent=='codex' else '独立审核 · 示例' }}</dd></div></dl>
-      <div class="stage-heading"><span>PUBLIC PROGRESS</span><span class="thinking-dot {{ 'lit' if working else '' }}"></span></div>
-      <ol class="stage-log"><li><time>10:24</time><p>{{ '任务已登记，等待执行' if agent=='codex' else '已创建独立审核阶段' }}</p></li><li><time>10:25</time><p>{{ '核对输入与资产清单' if agent=='codex' else '等待执行结果与验证证据' }}</p></li>{% if working %}<li class="active"><time>NOW</time><p>{{ '正在整理当前阶段结果…' if agent=='codex' else '正在检查产物与验收条件…' }}</p></li>{% endif %}{% if scenario=='complete' %}<li class="active"><time>10:28</time><p>{{ '已完成并提交审核' if agent=='codex' else '审核通过，可继续下一步' }}</p></li>{% endif %}</ol>
-      {% if scenario=='approval' and agent=='codex' %}<div class="approval-demo"><p>示例请求：在独立工作区保存一份计划。</p><button type="button" data-preview-decision="允许">允许这一次</button><button type="button" data-preview-decision="拒绝">拒绝</button><span class="decision-note"></span></div>{% endif %}
-      {% if scenario=='blocked' and agent=='codex' %}<div class="blocked-note">示例：缺少资产清单，等待补充材料。</div>{% endif %}
-      <footer>DEMO DATA <span>{{ '单轮工作 · 展示示例' if agent=='codex' else '审核结论 · 展示示例' }}</span></footer>
-    </article>{% endfor %}
-    <div class="handoff {{ 'transmitting' if scenario=='review' else '' }}" aria-hidden="true"><span></span>→</div>
+  {% for agent,character,name in [('codex','david','David'),('claude','lucy','Lucy')] %}
+    <article class="agent {{ agent }}"><header class="agent-top"><span><i class="agent-dot"></i>{{ agent|capitalize }} · {{ name }}</span><span class="state-pill">{{ 'IDLE' if connected else 'OFFLINE' }}</span></header>
+      <div class="agent-hero"><video src="{{ url_for('avatar',name=character+'.mp4') }}" poster="{{ url_for('avatar',name=character+'.jpg') }}" aria-label="{{ name }} 动态头像" autoplay muted loop playsinline preload="auto"></video><div><p class="agent-role">{{ 'EXECUTOR' if agent=='codex' else 'REVIEWER' }}</p><h2>{{ '等待任务' if agent=='codex' else '等待交接' }}</h2><p class="muted">{{ '实现 · 检查 · 修复' if agent=='codex' else '独立检查 · 反馈 · 再验证' }}</p></div></div>
+      <dl class="specs"><div><dt>MODEL</dt><dd>{{ default_model if agent=='codex' and connected else '尚未调用' }}</dd></div><div><dt>STATE</dt><dd>{{ '空闲' if connected else '未连接' }}</dd></div></dl>
+      <div class="stage-heading">CURRENT STAGE<span class="thinking-dot"></span></div><ol class="stage-log compact-stages"><li><p>当前没有选中的任务，不代表其他会话已停止。</p></li></ol>
+      <footer><span>实时任务阶段</span><button type="button" hx-get="/view/prompt" hx-target="#workspace">前往 Prompt ↗</button></footer>
+    </article>
+  {% endfor %}
+  <div class="handoff" aria-hidden="true"><span></span>→</div>
   </div>
-  <footer class="progress-footnote">以上全部是排版示例。没有连接真实进程、审核、服务器或 GPU。</footer>
 </section>
 {% endif %}

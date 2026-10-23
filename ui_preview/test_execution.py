@@ -65,5 +65,36 @@ class ExecutionUITests(unittest.TestCase):
         with self.client.session_transaction() as s:
             self.assertNotIn('worker_session',s);self.assertIn('owned',s['owned_worker_sessions'])
 
+    def test_progress_keeps_agents_and_stages_without_prompt_or_raw_commands(self):
+        with self.client.session_transaction() as s:s['owned_worker_sessions']=['owned']
+        status={'session':'owned','sessions':[{'id':'owned','model':'actual-model'}],
+                'turns':[{'id':'turn','state':'RUNNING','effort':'high','mode':'full','reworks':0,'reason':None}],
+                'approvals':[],'review_summary':None,'events':[{'kind':'COMMAND','body':'RAW_COMMAND_MUST_STAY_IN_PROMPT'}]}
+        with patch('execution.status',return_value=status),patch('execution.capability',return_value={'enabled':False}):
+            page=self.client.get('/execution/progress/owned').get_data(as_text=True)
+        self.assertEqual(page.count('<video '),2)
+        for value in ('David','Lucy','actual-model','CURRENT STAGE','data-view="progress"','hx-target="this"'):
+            self.assertIn(value,page)
+        for value in ('RAW_COMMAND_MUST_STAY_IN_PROMPT','prompt-form','live-answer'):
+            self.assertNotIn(value,page)
+
+    def test_idle_and_offline_progress_keep_both_avatars_without_fake_activity(self):
+        for enabled in (False,True):
+            cap={'enabled':enabled,'models':['actual-model'],'default_model':'actual-model'}
+            with patch('execution.capability',return_value=cap):page=self.client.get('/view/progress').get_data(as_text=True)
+            self.assertEqual(page.count('<video '),2)
+            self.assertIn('David',page);self.assertIn('Lucy',page)
+            self.assertNotIn('prompt-form',page);self.assertNotIn('SCENE–001',page)
+
+    def test_review_pause_is_shown_on_reviewer_after_executor_completed(self):
+        with self.client.session_transaction() as s:s['owned_worker_sessions']=['owned']
+        status={'session':'owned','sessions':[{'id':'owned','model':'actual-model'}],
+                'turns':[{'id':'turn','state':'PAUSED_REVIEW','effort':'high','mode':'approval','reworks':0,'reason':'CONTEXT_LIMIT'}],
+                'approvals':[],'review_summary':None,'events':[]}
+        with patch('execution.status',return_value=status):
+            page=self.client.get('/execution/progress/owned').get_data(as_text=True)
+        self.assertIn('执行完成 · 等待审核',page);self.assertIn('<h2>审核暂停</h2>',page)
+        self.assertIn('CONTEXT_LIMIT',page);self.assertNotIn('<h2>等待 Codex 交接</h2>',page)
+
 
 if __name__=='__main__':unittest.main()

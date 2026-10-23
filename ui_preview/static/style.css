@@ -167,3 +167,16 @@ html.motion-off *,html.page-hidden *{animation:none!important;transition:none!im
 @media(max-width:950px){body{grid-template-columns:64px minmax(0,1fr)}.sidebar{padding:22px 7px}.brand{padding:0 8px 24px}.brand>span:last-child,.nav>span:last-child,.side-label,.side-copy,.side-footer{display:none}.nav{padding:12px;justify-content:center}.topbar{padding:0 15px;gap:10px}.prompt-page{padding:0 20px 12px}.progress-page{padding:18px 20px}.agent-hero .muted{display:none}.specs dd{font-size:9px}.settings-row{gap:3px}.setting-trigger{max-width:170px}.preview-badge{font-size:8px}}
 @media(max-width:650px){.gpu-detail,.gpu-chip em,.preview-badge{display:none}.gpu-chip{padding:7px;gap:7px}.topbar{height:58px}.prompt-page{padding:0 12px 10px}.welcome h1{font-size:24px}.welcome>p{font-size:12px}.starter-row{flex-direction:column;align-items:center}.composer-caption,.composer-note>span:last-child{display:none}.composer{padding:10px;border-radius:17px}.setting select{max-width:150px;font-size:9px}.progress-page{overflow:auto;display:block}.progress-heading{margin-bottom:18px}.progress-heading h1{font-size:21px}.mission-id{display:none}.scenario-bar{margin-bottom:18px}.pipeline{margin-bottom:18px}.pipeline-step{font-size:8px;gap:5px}.pipeline-step:not(:last-child)::after{margin:0 5px}.agents{grid-template-columns:1fr;margin-bottom:14px}.agent{min-height:390px}.handoff{display:none}.progress-footnote{margin-top:12px}}
 @media(max-height:700px) and (min-width:651px){.progress-page{padding-top:16px;gap:12px}.progress-heading h1{font-size:22px;margin-bottom:7px}.eyebrow{margin-bottom:7px}.agent-hero{margin:13px 0}.agent-hero video{width:66px;height:66px}.specs{padding:9px 0;margin-bottom:12px}.agent>footer{margin-top:8px}.welcome{padding-bottom:20px}.welcome h1{font-size:26px}.welcome>p{margin-bottom:17px}.starter-row button{padding:8px 12px}#prompt{min-height:54px;height:60px}.composer-top{margin-bottom:2px}.composer-note{margin-top:6px}.prompt-footnote{padding-top:7px}}
+
+/* Live Progress is an agent/stage board. Detailed conversation stays in Prompt. */
+.live-board .agent-hero video{width:132px;height:132px;object-fit:contain;aspect-ratio:1}
+.live-board .agent-hero{margin:22px 0;gap:20px;flex:none}
+.live-board .agent-hero h2{font-size:21px;line-height:1.35}
+.live-board .specs dd{font-size:12px}
+.live-board .compact-stages{overflow:hidden;min-height:50px}
+.live-board .compact-stages li{font-size:12px;padding:8px 0 8px 12px}
+.live-board .agent>footer{align-items:center;letter-spacing:0}
+.live-board button{border:1px solid #6ceee62b;background:#6ceee60b;color:#b7e9e7;border-radius:8px;padding:8px 11px;font:11px 'Segoe UI',sans-serif;cursor:pointer}
+.pending-strip{display:flex;align-items:center;justify-content:space-between;color:#d8c58a;background:#d8c58a09;border:1px solid #d8c58a20;padding:9px 12px;border-radius:9px;font-size:12px}
+@media(max-height:720px){.live-board .agent-hero video{width:96px;height:96px}.live-board .agent-hero{margin:12px 0}.live-board .compact-stages li{font-size:11px;padding:5px 0 5px 9px}}
+@media(max-width:1000px){.live-board .agent-hero video{width:90px;height:90px}.live-board .agent-hero{gap:12px}.live-board .agent-hero h2{font-size:16px}.live-board .specs dd{font-size:10px}}

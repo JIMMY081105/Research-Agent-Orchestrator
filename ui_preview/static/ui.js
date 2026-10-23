@@ -4,6 +4,22 @@
   const draft = new Map();
   let fresh = false;
   const q = s => document.querySelector(s);
+  let viewEpoch=0,intendedView=document.documentElement.dataset.page||'prompt';
+  const requestEpoch=new WeakMap();
+  document.addEventListener('htmx:beforeRequest',event=>{
+    const detail=event.detail,path=detail.requestConfig?.path||'',navigation=path.match(/^\/view\/(prompt|progress)(?:\?|$)/);
+    if(navigation&&detail.target?.id==='workspace'){
+      intendedView=navigation[1];viewEpoch++;
+      // Abort only display GETs. A submitted task/decision is never cancelled.
+      document.querySelectorAll('[hx-get^="/execution/"]').forEach(elt=>htmx.trigger(elt,'htmx:abort'));
+    }
+    if((path.startsWith('/execution/status/')&&intendedView!=='prompt')||(path.startsWith('/execution/progress/')&&intendedView!=='progress')){event.preventDefault();return;}
+    if(detail.xhr)requestEpoch.set(detail.xhr,viewEpoch);
+  });
+  document.addEventListener('htmx:beforeSwap',event=>{
+    const detail=event.detail;
+    if(detail.xhr&&requestEpoch.has(detail.xhr)&&requestEpoch.get(detail.xhr)!==viewEpoch)detail.shouldSwap=false;
+  });
   const reduced = matchMedia('(prefers-reduced-motion: reduce)');
   function remember() {
     document.querySelectorAll('[data-draft]').forEach(e => draft.set(e.name, e.value));
