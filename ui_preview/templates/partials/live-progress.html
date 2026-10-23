@@ -2,6 +2,7 @@
 {% set review=live.review_summary %}
 <section class="progress-page" data-view="progress" hx-get="/execution/progress/{{ live.session }}" hx-trigger="every 3s" hx-swap="outerHTML">
   <header class="progress-heading"><div><p class="eyebrow">MISSION CONTROL / LIVE</p><h1>{{ turn.state if turn else '无登记任务' }}</h1><p>{{ turn.reason or '执行与审核进度来自本机登记回执。' if turn else '' }}</p></div><span class="mission-id">{{ turn.id if turn else '' }}</span></header>
+  {% if live.approvals %}<p role="status">有 {{ live.approvals|length }} 项待处理请求。<button type="button" hx-get="/view/prompt" hx-target="#workspace">查看审批与回复</button></p>{% endif %}
   {% if turn %}<div class="pipeline"><div class="pipeline-step done">✓ 已登记</div><div class="pipeline-step {{ 'current' if turn.state=='RUNNING' else '' }}">02 Codex 执行</div><div class="pipeline-step {{ 'current' if turn.state=='REVIEWING' else '' }}">03 Claude 审核</div><div class="pipeline-step {{ 'done' if turn.state=='REVIEW_PASS' else '' }}">04 复验 · 修复 {{ turn.reworks }}/2</div></div>{% endif %}
   <div class="agents">{% for agent,character in [('codex','david'),('claude','lucy')] %}
     {% set working=turn and ((agent=='codex' and turn.state=='RUNNING') or (agent=='claude' and turn.state=='REVIEWING')) %}

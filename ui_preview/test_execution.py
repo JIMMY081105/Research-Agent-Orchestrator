@@ -33,5 +33,37 @@ class ExecutionUITests(unittest.TestCase):
             self.assertEqual(self.client.post('/execute',data={'csrf':'nonce','request_id':'foreign'},headers={'Origin':'http://localhost'}).status_code,403)
             submit.assert_not_called()
 
+    def test_owned_task_restores_after_prompt_progress_navigation_even_if_paused(self):
+        with self.client.session_transaction() as s:
+            s['worker_session']='owned';s['owned_worker_sessions']=['owned']
+        with patch('execution.capability',return_value={'enabled':False}),patch('execution.submit') as submit,patch('execution.store') as store:
+            for path in ('/view/prompt','/?page=prompt'):
+                page=self.client.get(path).get_data(as_text=True)
+                self.assertIn('hx-get="/execution/status/owned"',page)
+                self.assertIn('hx-trigger="load"',page)
+            page=self.client.get('/view/progress').get_data(as_text=True)
+            self.assertIn('hx-get="/execution/progress/owned"',page)
+            submit.assert_not_called();store.assert_not_called()
+
+    def test_restored_approval_is_visible_without_deciding_or_resubmitting(self):
+        with self.client.session_transaction() as s:s['owned_worker_sessions']=['owned']
+        status={'turns':[{'id':'turn','prompt':'test','state':'WAITING_APPROVAL','response':'waiting','reworks':0}],
+                'events':[],'approvals':[{'id':'approval','turn':'turn','method':'item/commandExecution/requestApproval','params':{'command':'read files'}}], 'review_summary':None}
+        with patch('execution.status',return_value=status),patch('execution.capability',return_value={'enabled':False}),patch('execution.store') as store,patch('execution.submit') as submit:
+            page=self.client.get('/execution/status/owned').get_data(as_text=True)
+            self.assertIn('WAITING_APPROVAL',page);self.assertIn('允许这一次',page)
+            self.assertIn('name="id" value="approval"',page)
+            self.assertIn('/execution/decision',page)
+            store.assert_not_called();submit.assert_not_called()
+
+    def test_new_chat_does_not_restore_or_cancel_previous_task(self):
+        with self.client.session_transaction() as s:
+            s['worker_session']='owned';s['owned_worker_sessions']=['owned']
+        with patch('execution.capability',return_value={'enabled':False}),patch('execution.store') as store:
+            page=self.client.get('/view/prompt?new=1').get_data(as_text=True)
+            self.assertNotIn('/execution/status/owned',page);store.assert_not_called()
+        with self.client.session_transaction() as s:
+            self.assertNotIn('worker_session',s);self.assertIn('owned',s['owned_worker_sessions'])
+
 
 if __name__=='__main__':unittest.main()
