@@ -39,8 +39,9 @@ SOURCE_FILES = dashboard_bundle.FILES + (
     "tools/delivery.ps1", "DELIVERY.md",
     "ui_preview/test_preview.py",
     "ui_preview/test_navigation.cjs",
+    "ui_preview/templates/partials/tasks.html","ui_preview/templates/partials/artifacts.html",
 )
-PIPELINE_SOURCE_ADDITIONS = frozenset(("delivery_agent.py", "researchops/delivery_agent.py",
+PIPELINE_SOURCE_ADDITIONS = frozenset(("ui_preview/templates/partials/tasks.html","ui_preview/templates/partials/artifacts.html","delivery_agent.py", "researchops/delivery_agent.py",
                                      "tests/test_delivery_agent.py", "tools/delivery.ps1", "DELIVERY.md", "ui_preview/test_preview.py", "ui_preview/test_navigation.cjs"))
 APP_FILES = (
     "SceneControl.exe", "Microsoft.Web.WebView2.Core.dll", "Microsoft.Web.WebView2.WinForms.dll",
@@ -194,10 +195,11 @@ def verify(bundle, expected):
     # permits only these two exact file sets and still checks every byte/hash.
     source_names = current_names
     allowed = common | {"source/" + name for name in current_names}
-    legacy_names = tuple(n for n in current_names if n not in PIPELINE_SOURCE_ADDITIONS)
-    legacy_allowed = common | {"source/" + name for name in legacy_names}
-    if type(record.get('files')) is dict and set(record['files']) == legacy_allowed:
-        source_names, allowed = legacy_names, legacy_allowed
+    for omitted in (PIPELINE_SOURCE_ADDITIONS,frozenset(('ui_preview/templates/partials/tasks.html','ui_preview/templates/partials/artifacts.html'))):
+        legacy_names=tuple(n for n in current_names if n not in omitted)
+        legacy_allowed=common|{'source/'+name for name in legacy_names}
+        if type(record.get('files')) is dict and set(record['files'])==legacy_allowed:
+            source_names,allowed=legacy_names,legacy_allowed
     if (type(record) is not dict or set(record) != {"owner", "source_sha256", "files", "sha256"}
             or record.get("owner") != OWNER or not _hashmap(record.get("files"), allowed)
             or record.get("sha256") != expected or digest(canonical(record["files"])) != expected):

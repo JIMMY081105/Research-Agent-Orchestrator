@@ -6,6 +6,7 @@ import tempfile
 import time
 import unittest
 import uuid
+from contextlib import nullcontext
 from unittest.mock import Mock, patch
 from researchops.worker_service import Service
 from researchops.worker_store import OWNER, WorkerError, save, utc
@@ -65,8 +66,63 @@ class WorkerServiceTests(unittest.TestCase):
         self.assertEqual(calls[-1].args[1]['sandboxPolicy'], {'type': 'dangerFullAccess'})
         self.assertEqual(calls[-1].args[1]['approvalPolicy'], 'never')
         self.assertEqual(calls[-1].args[1]['threadId'], 'owned')
-        self.assertEqual(calls[-1].args[1]['model'], turn['model'])
-        self.assertNotIn('resume-last', str(calls))
+        self.assertEqual(calls[-1].args[1]['model'],turn['model'])
+        self.assertNotIn('resume-last',str(calls))
+
+    def test_fast_plan_parameters_are_native_and_plan_is_read_only(self):
+        turn=self.turn('full');turn.update(work_mode='plan',service_tier='priority')
+        self.service.rpc.call.side_effect=[{'thread':{'id':'owned'},'model':turn['model'],'approvalPolicy':'untrusted','sandbox':{'type':'readOnly'}},{'turn':{'id':'native'}}]
+        with patch('researchops.worker_service.charge',return_value='call'):self.service.begin(turn)
+        params=self.service.rpc.call.call_args.args[1]
+        self.assertEqual(params['serviceTier'],'priority');self.assertEqual(params['collaborationMode']['mode'],'plan')
+        self.assertIsNone(params['collaborationMode']['settings']['developer_instructions'])
+        self.assertEqual(params['sandboxPolicy'],{'type':'readOnly'})
+        self.service.handle({'method':'item/plan/delta','params':{'threadId':'owned','turnId':'native','itemId':'plan','delta':'1. Check inputs'}})
+        self.service.handle({'method':'item/completed','params':{'threadId':'owned','turnId':'native','item':{'id':'plan','type':'plan','text':'1. Check inputs\n2. Verify sum\n3. Report'}}})
+        self.assertEqual(self.service.review_response(),'1. Check inputs\n2. Verify sum\n3. Report')
+
+    def test_goal_uses_persisted_native_contract_without_resetting_budget(self):
+        turn=self.turn('full');turn.update(work_mode='goal',goal_objective='Keep exact accounting',service_tier='priority')
+        current={'objective':'Keep exact accounting','status':'paused','tokensUsed':900,'tokenBudget':1000}
+        self.service.rpc.call.side_effect=[{'thread':{'id':'owned'},'model':turn['model'],'approvalPolicy':'never','sandbox':{'type':'dangerFullAccess'}},{'goal':current},{'goal':{**current,'status':'active'}},{'turn':{'id':'native'}}]
+        with patch('researchops.worker_service.charge',return_value='call'):self.service.begin(turn)
+        params=self.service.rpc.call.call_args_list[2].args[1]
+        self.assertNotIn('objective',params);self.assertNotIn('tokenBudget',params)
+        turn['tool_items']=set()
+        self.service.rpc.call.side_effect=[{'goal':{**current,'status':'active'}},{'goal':current}]
+        self.service.handle({'method':'turn/completed','params':{'threadId':'owned','turn':{'id':'native','status':'completed'}}})
+        self.assertEqual(len(self.store.status()['turns']),1)
+        state=json.loads((self.store.runtime/'goals'/turn['session']/'state.json').read_text())
+        self.assertEqual(state['tokensUsed'],900);self.assertEqual(state['host_wait'],'NO_ACTION_CONTINUATION_SUPPRESSED')
+
+    def test_productive_goal_continues_only_after_review_and_pause_suppresses_next_dispatch(self):
+        self.store.capability.return_value.update(work_modes=['task','goal'])
+        for paused in (False,True,'admission','busy'):
+            with self.subTest(paused=paused):
+                self.store.capability.return_value['enabled']=True
+                request={'id':str(uuid.uuid4()),'session':None,'prompt':'Bounded goal stage','mode':'full','effort':'high','skills':[],'work_mode':'goal','goal_objective':'Original objective'}
+                self.store.submit(request);turn=self.service.next_turn()
+                goal={'objective':'Original objective','status':'active','tokensUsed':100}
+                self.service.rpc.call.side_effect=[{'thread':{'id':'owned'},'model':'test','approvalPolicy':'never','sandbox':{'type':'dangerFullAccess'}},{'goal':None},{'goal':goal},{'turn':{'id':'native'}}]
+                with patch('researchops.worker_service.charge',return_value='call'):self.service.begin(turn)
+                turn['tool_items']={'actual-command'}
+                if paused is True:save(self.store.runtime/'goals'/turn['session']/'pause-request.json',{'owner':OWNER})
+                if paused=='admission':self.store.capability.return_value['enabled']=False
+                self.service.rpc.call.side_effect=[{'goal':goal},{'goal':{**goal,'status':'paused'}}]
+                def review(*args):
+                    self.assertEqual(self.store.status(turn['session'])['goal']['status'],'paused')
+                    self.assertIsNone(self.service.next_turn());return {'verdict':'PASS'}
+                self.service.reviewer=review
+                with patch.object(self.store,'submit',side_effect=WorkerError('WORKER_BUSY_FINISH_OR_ANSWER_CURRENT_TURN')) if paused=='busy' else nullcontext():
+                    self.service.handle({'method':'turn/completed','params':{'threadId':'owned','turn':{'id':'native','status':'completed'}}})
+                next_turn=self.service.next_turn()
+                if paused:
+                    self.assertIsNone(next_turn)
+                    self.assertEqual(self.store.status(turn['session'])['turns'][0]['state'],'REVIEW_PASS')
+                    self.assertEqual(self.store.status(turn['session'])['goal']['host_wait'],'ADMISSION_PAUSED' if paused=='admission' else 'DISPATCH_PAUSED_WORKER_BUSY_FINISH_OR_ANSWER_CURRENT_TURN' if paused=='busy' else 'USER_PAUSED')
+                else:
+                    self.assertEqual(next_turn['session'],turn['session']);self.assertEqual(next_turn['goal_objective'],'Original objective');self.assertEqual(next_turn['work_mode'],'goal')
+                    self.store.update(next_turn['id'],state='CANCELLED')
 
     def test_native_policy_mismatch_blocks_before_model(self):
         turn = self.turn()

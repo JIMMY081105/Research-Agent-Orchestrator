@@ -37,6 +37,8 @@ class Service:
         self.rpc = None
         self.skills = []
         self.models = []
+        self.model_details={}
+        self.work_modes=['task']
         self.default_model = None
         self.active_turn = None
         self.message_text = {}
@@ -70,10 +72,25 @@ class Service:
         def started(pid, birth):
             save(self.store.runtime / "process.json", {"owner": OWNER, "pid": pid, "birth": birth,
                  "parent_pid": os.getpid(), "source_sha256": self.source_sha, "created_at": utc()})
-        self.rpc = self.rpc_factory(machine["codex"], self.store.runtime, started)
+        executable=machine['codex']
+        activation=read_small_json(self.store.runtime/'activation.json')
+        cli=activation.get('codex_cli')
+        if cli:
+            path=safe_path(cli['path'])
+            if not path.is_absolute() or sha(path.read_bytes())!=cli['sha256']:raise WorkerError('PINNED_NATIVE_CLI_CHANGED')
+            executable=str(path)
+        self.rpc = self.rpc_factory(executable, self.store.runtime, started)
         model_rows = self.rpc.call("model/list", {}).get("data", [])
         self.models = [v["id"] for v in model_rows if type(v.get("id")) is str]
+        self.model_details={v['id']:{'efforts':[x['reasoningEffort'] for x in v.get('supportedReasoningEfforts',[]) if x.get('reasoningEffort') in ('low','medium','high','xhigh','max')],
+            'service_tiers':[x['id'] for x in v.get('serviceTiers',[]) if x.get('id')=='priority']} for v in model_rows if type(v.get('id')) is str}
+        modes=self.rpc.call('collaborationMode/list',{}).get('data',[])
+        if any(x.get('mode')=='plan' for x in modes):self.work_modes.append('plan')
+        # A persisted, zero-model probe confirms the actual goal API. Ephemeral
+        # threads deliberately do not support persisted goals.
+        if cli:self.work_modes.append('goal')
         preferred_model = next((v["id"] for v in model_rows if v.get("isDefault") is True), None)
+        if 'gpt-6.1-sol' in self.models:preferred_model='gpt-6.1-sol'
         if not preferred_model or preferred_model not in self.models:
             raise WorkerError("NATIVE_AVAILABLE_DEFAULT_MODEL_MISSING")
         rows = self.rpc.call("skills/list", {"cwds": [str(self.store.runtime)], "forceReload": False}).get("data", [])
@@ -102,6 +119,7 @@ class Service:
                  "parent_pid": os.getppid(), "state": state, "reason": reason, "observed_at": utc(),
                  "started_at": self.started_at, "trigger": self.trigger, "source_sha256": self.source_sha,
                  "models": self.models, "default_model": self.default_model, 'failure_details': self.failure_details,
+                 'model_details':self.model_details,'work_modes':self.work_modes,
                  "skills": [{k: v for k, v in s.items() if k != "path"} for s in self.skills],
                  'heartbeat_write_failures':self.heartbeat_write_failures}
             try:save(self.store.runtime / "service.json", record)
@@ -132,7 +150,7 @@ class Service:
             agents.write_bytes(template.read_bytes())
         self.store.update(turn["id"], state="STARTING")
         requested = policy(turn["mode"], workspace)
-        if turn.get('kind')=='analysis':
+        if turn.get('kind')=='analysis' or turn.get('work_mode')=='plan':
             requested={'approvalPolicy':'untrusted','sandboxPolicy':{'type':'readOnly'}}
         if turn["thread"]:
             response = self.rpc.call("thread/resume", {"threadId": turn["thread"], "excludeTurns": True,
@@ -142,7 +160,7 @@ class Service:
                 raise WorkerError("WORKER_RESUME_SESSION_MISMATCH")
         else:
             response = self.rpc.call("thread/start", {"cwd": str(workspace), "modelProvider": "openai",
-                "approvalPolicy": requested["approvalPolicy"], "sandbox": 'read-only' if turn.get('kind')=='analysis' else "danger-full-access" if turn["mode"] == "full" else "workspace-write",
+                "approvalPolicy": requested["approvalPolicy"], "sandbox": 'read-only' if turn.get('kind')=='analysis' or turn.get('work_mode')=='plan' else "danger-full-access" if turn["mode"] == "full" else "workspace-write",
                 "developerInstructions": RULES, "model": turn["model"], "ephemeral": False})
             expected_type = requested["sandboxPolicy"]["type"]
             if response.get("sandbox", {}).get("type") != expected_type or response.get("approvalPolicy") != requested["approvalPolicy"]:
@@ -153,6 +171,14 @@ class Service:
                 db.execute("UPDATE sessions SET thread=?,native_session=? WHERE id=?", (turn["thread"], turn["native_session"], turn["session"]))
         if response.get('model') != turn['model']:
             raise WorkerError('NATIVE_OWNED_SESSION_MODEL_MISMATCH')
+        if turn.get('work_mode')=='goal':
+            current=self.rpc.call('thread/goal/get',{'threadId':turn['thread']}).get('goal')
+            params={'threadId':turn['thread'],'status':'active','origin':'user'}
+            if current:
+                if current['objective']!=turn['goal_objective'] or (current['status']=='complete' and not turn.get('reworks')):raise WorkerError('EXISTING_GOAL_REQUIRES_NEW_CONVERSATION')
+            else:params['objective']=turn['goal_objective']
+            goal=current if current and current['status']=='complete' else self.rpc.call('thread/goal/set',params)['goal']
+            save(self.store.runtime/'goals'/turn['session']/'state.json',goal)
         self.store.event(turn["session"], turn["id"], "INSTRUCTIONS", json.dumps({"sources": response.get("instructionSources", []), "mode": turn["mode"], "workspace": str(workspace)}, ensure_ascii=False))
         selected = {s["id"]: s for s in self.skills}
         prompt = turn['prompt']
@@ -176,8 +202,14 @@ class Service:
         call_id = charge(self.runtime, "codex", "worker-execute:" + turn["id"], "execute")
         turn['call_id'] = call_id
         self.store.update(turn["id"], call_id=call_id)
-        response = self.rpc.call("turn/start", {"threadId": turn["thread"], "input": items, "cwd": str(workspace),
-                **requested, 'model': turn['model'], "effort": turn["effort"], "summary": "none"})
+        params={"threadId": turn["thread"], "input": items, "cwd": str(workspace),
+                **requested, 'model': turn['model'], "effort": turn["effort"], "summary": "none"}
+        if turn.get('service_tier') in ('standard','priority'):params['serviceTier']='priority' if turn['service_tier']=='priority' else None
+        if turn.get('work_mode') in ('plan','task','goal'):
+            params['collaborationMode']={'mode':'plan' if turn['work_mode']=='plan' else 'default',
+                'settings':{'model':turn['model'],'reasoning_effort':turn['effort'],'developer_instructions':None}}
+        save(attempt/'native-settings.json',{'model':turn['model'],'effort':turn['effort'],'serviceTier':params.get('serviceTier'),'collaborationMode':params.get('collaborationMode'),'policy':requested})
+        response = self.rpc.call("turn/start", params)
         turn["native_turn"] = response["turn"]["id"]
         turn["started_monotonic"] = time.monotonic()
         turn["running_seconds"] = 0.0
@@ -186,6 +218,7 @@ class Service:
         self.message_text = {}
         self.message_phases = {}
         self.active_writers = set()
+        turn['tool_items']=set()
         self.pending_terminal = None
         self.store.update(turn["id"], state="RUNNING", native_turn=turn["native_turn"])
         self.store.event(turn["session"], turn["id"], "STATUS", "Codex 已开始 · " + turn["mode"])
@@ -255,13 +288,16 @@ class Service:
             save(safe_path(self.runtime / 'worker/turns' / turn['id'] / 'token-usage.json'),
                  dict(call_id=turn['call_id'], session_id=turn['session'], thread_id=turn['thread'],
                       turn_id=turn['native_turn'], token_usage=app_server_usage(params), observed_at=utc()))
-        elif method == "item/agentMessage/delta":
+        elif method in ("item/agentMessage/delta","item/plan/delta"):
             key = params.get("itemId", "message")
+            if method=='item/plan/delta':self.message_phases[key]='final_answer'
             self.message_text[key] = (self.message_text.get(key, "") + params.get("delta", ""))[:64000]
             self.store.update(turn["id"], response=clean("\n".join(self.message_text.values()), 64000))
         elif method in ("item/started", "item/completed"):
             item = params.get("item", {})
             kind = item.get("type")
+            if method=='item/completed' and kind in ('commandExecution','fileChange','mcpToolCall','dynamicToolCall'):
+                turn.setdefault('tool_items',set()).add(item.get('id'))
             if kind in ('commandExecution','fileChange'):
                 if params.get('threadId') != turn['thread'] or params.get('turnId') != turn['native_turn']:
                     raise WorkerError('NATIVE_WRITER_SCOPE_MISSING')
@@ -277,10 +313,10 @@ class Service:
                 self.store.event(turn["session"], turn["id"], "COMMAND", json.dumps({"command": clean(item.get("command", ""), 6000), "cwd": item.get("cwd"), "status": item.get("status"), "exit_code": item.get("exitCode")}, ensure_ascii=False))
             elif kind == "fileChange":
                 self.store.event(turn["session"], turn["id"], "FILE_CHANGE", json.dumps({"changes": [{"path": c.get("path"), "kind": c.get("kind")} for c in item.get("changes", [])][:40], "status": item.get("status")}, ensure_ascii=False))
-            elif kind == "agentMessage" and method == "item/completed":
+            elif kind in ("agentMessage","plan") and method == "item/completed":
                 key = item.get("id", "message")
                 self.message_text[key] = clean(item.get("text", ""), 64000)
-                self.message_phases[key] = item.get('phase')
+                self.message_phases[key] = 'final_answer' if kind=='plan' else item.get('phase')
                 self.store.update(turn["id"], response=clean("\n".join(self.message_text.values()), 64000))
             if self.pending_terminal is not None and not self.active_writers:
                 terminal = self.pending_terminal
@@ -304,6 +340,15 @@ class Service:
                 self.store.event(turn['session'],turn['id'],'STATUS','原生回合已结束；仍等待本系统命令退出，不重复派发。')
                 return
             state = native.get("status")
+            goal=None
+            if turn.get('work_mode')=='goal':
+                goal=self.rpc.call('thread/goal/get',{'threadId':turn['thread']}).get('goal')
+                if goal and goal['status']=='active':
+                    # Claude must finish the fixed-artifact audit before any
+                    # next turn. Do not let an active goal bypass that boundary.
+                    goal=self.rpc.call('thread/goal/set',{'threadId':turn['thread'],'status':'paused','origin':'automatic'})['goal']
+                    goal={**goal,'host_wait':'CLAUDE_REVIEW','was_active':True}
+                if goal:save(self.store.runtime/'goals'/turn['session']/'state.json',goal)
             if state != "completed":
                 # Persist fixed categories only, never raw provider responses.
                 error = native.get("error") or {}
@@ -330,6 +375,7 @@ class Service:
             self.store.update(turn["id"], state="REVIEWING", response=turn["response"])
             self.heartbeat()
             try:
+                turn['goal_state']=goal
                 result = self.reviewer(self.runtime, self.store, turn, self.source_sha)
                 if result['verdict'] == 'REWORK' and result.get('issues') and turn.get('reworks', 0) < 2:
                     number = turn.get('reworks', 0)+1
@@ -341,6 +387,26 @@ class Service:
                 else:
                     self.store.update(turn["id"], state="REVIEW_PASS" if result["verdict"] == "PASS" else "NEEDS_REWORK",
                                       reason=None if result["verdict"] == "PASS" else "REWORK_LIMIT_OR_MISSING_FINDINGS")
+                    if result['verdict']=='PASS' and goal and goal.get('was_active'):
+                        wait=('USER_PAUSED' if (self.store.runtime/'goals'/turn['session']/'pause-request.json').exists()
+                              else 'NO_ACTION_CONTINUATION_SUPPRESSED' if not turn.get('tool_items')
+                              else 'ADMISSION_PAUSED' if not self.store.capability().get('enabled') else None)
+                        if wait:
+                            # A maintenance/admission pause after a valid PASS
+                            # is not a failed review and must not replay execution.
+                            save(self.store.runtime/'goals'/turn['session']/'state.json',{**goal,'host_wait':wait})
+                        else:
+                            # Each continuation is a new durable, budgeted and
+                            # reviewed turn in the exact same owned session.
+                            request=read_small_json(self.store.runtime/'turns'/turn['id']/'request.json')
+                            request.update(id=str(uuid.uuid4()),session=turn['session'],prompt='Continue the existing goal. Verify against concrete evidence; complete it only when the original objective is achieved. Do not expand task authorization.')
+                            try:self.store.submit(request)
+                            except WorkerError as error:
+                                # Another admitted turn or readiness change can
+                                # win this boundary. Retain the real PASS and
+                                # paused goal; never replay its finished work.
+                                save(self.store.runtime/'goals'/turn['session']/'state.json',
+                                     {**goal,'host_wait':'DISPATCH_PAUSED_'+error.code})
             except (WorkerError, OSError, ValueError) as error:
                 self.store.update(turn["id"], state="PAUSED_REVIEW", reason=str(error) if isinstance(error, WorkerError) else "REVIEW_UNVERIFIED")
             finally:
@@ -354,6 +420,8 @@ class Service:
             self.handle(value)
         if self.active_turn:
             turn = self.active_turn
+            if turn.get('work_mode')=='goal' and (self.store.runtime/'goals'/turn['session']/'pause-request.json').exists():
+                with self.store.db() as db:db.execute('UPDATE turns SET cancel_requested=1 WHERE id=?',(turn['id'],))
             with self.store.db(True) as db:
                 row = db.execute("SELECT state,cancel_requested FROM turns WHERE id=?", (turn["id"],)).fetchone()
                 state = row["state"]
@@ -363,6 +431,9 @@ class Service:
             turn["last_tick"] = now
             timed_out = state == "RUNNING" and turn["running_seconds"] > 3600
             if self.pending_terminal is None and state != "CANCELLING" and (row["cancel_requested"] or timed_out):
+                if turn.get('work_mode')=='goal':
+                    goal=self.rpc.call('thread/goal/set',{'threadId':turn['thread'],'status':'paused','origin':'user' if row['cancel_requested'] else 'automatic'})['goal']
+                    save(self.store.runtime/'goals'/turn['session']/'state.json',goal)
                 self.rpc.call("turn/interrupt", {"threadId": turn["thread"], "turnId": turn["native_turn"]})
                 # The interrupt RPC acknowledges a request, not termination.
                 # Retain the owned turn and BUSY writer gate until its exact

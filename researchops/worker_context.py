@@ -27,6 +27,7 @@ def packet(turn, source_sha, snapshot, previous=None):
     value = dict(scope='LOCAL_OWNED_WORKSPACE_ONLY', request=turn['prompt'],
                  task=turn['id'], attempt=turn.get('reworks', 0), source_sha256=source_sha,
                  final_response=turn['response'], workspace=snapshot, changes=changes,
+                 execution_settings={k:turn.get(k) for k in ('work_mode','service_tier','goal_objective','goal_state')},
                  previous_review=previous.get('review') if previous else None,
                  previous_binding=previous.get('binding_sha256') if previous else None,
                  external_evidence_verified=False)

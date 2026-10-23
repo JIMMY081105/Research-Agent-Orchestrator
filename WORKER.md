@@ -9,7 +9,26 @@ change to global config/auth, or adoption of an old interactive session.
 In Mission choose **Codex 工作**, write a task and send. A new task creates an
 isolated directory under `.runtime/worker/workspaces/<UUID>`. Replies and native
 command/file statuses update immediately; these turns do not wait for the legacy
-15-minute analysis queue. **文本分析** retains the old bounded queue and role selector.
+15-minute observation schedule. **文本分析** uses a fresh native read-only session.
+
+The capability release pins the already installed desktop CLI by absolute path and
+SHA-256 in the worker activation, without changing npm, global config or login.
+Models/efforts/Fast come from its actual catalog. New conversations default to
+`gpt-6.1-sol` and `xhigh` when available. Fast forwards the advertised `priority`
+service tier through the existing subscription; it can consume quota faster.
+
+Plan forwards native `collaborationMode: plan` with built-in instructions and an
+enforced read-only sandbox. Its public plan text is distinct from hidden reasoning.
+Goal uses native persisted thread goals. Every productive continuation is a new
+durable reviewed turn; review/approval/accounting remain mandatory. Pause during
+review prevents the next dispatch; Resume retains native usage and objective.
+No-action stages suppress automatic continuation. Goal mode currently has no
+final-stage automatic Draft PR delivery; use Task for that delivery contract.
+
+The task sidebar is scoped to the signed browser profile with durable local
+ownership. Select a task to restore its conversation and Codex/Claude board.
+Visualisation selects the discovered skill explicitly and displays bounded
+task-owned HTML/PNG/JPEG; HTML has a sandboxed origin and no network/form access.
 
 ## Permission modes
 

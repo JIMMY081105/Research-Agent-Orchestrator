@@ -6,7 +6,7 @@ from app import create_app
 
 class PreviewTests(unittest.TestCase):
     def setUp(self):
-        self.client=create_app(testing=True).test_client()
+        application=create_app(testing=True);self.addCleanup(application.testing_history.cleanup);self.client=application.test_client()
     def test_frozen_flat_avatar_assets_and_byte_range(self):
         import tempfile
         from pathlib import Path

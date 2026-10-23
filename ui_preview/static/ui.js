@@ -22,7 +22,7 @@
   });
   const reduced = matchMedia('(prefers-reduced-motion: reduce)');
   function remember() {
-    document.querySelectorAll('[data-draft]').forEach(e => draft.set(e.name, e.value));
+    document.querySelectorAll('[data-draft]').forEach(e => draft.set(e.name, e.type==='checkbox'?e.checked:e.value));
   }
   function motion() {
     document.documentElement.classList.toggle('page-hidden', document.hidden);
@@ -46,7 +46,7 @@
       if (!draft.has(e.name)) return;
       const group=e.closest('[data-setting]'),value=draft.get(e.name);
       if(group&&!Array.from(group.querySelectorAll('[data-option]')).some(o=>o.dataset.option===value)){draft.set(e.name,e.value);return;}
-      e.value=value;
+      if(e.type==='checkbox')e.checked=Boolean(value);else e.value=value;
     });
     syncPickers();
     motion();
@@ -79,6 +79,7 @@
       const input = group.querySelector('input');input.value = option.dataset.option;
       input.dispatchEvent(new Event('change',{bubbles:true}));menu.hidePopover();group.querySelector('.setting-trigger').focus();
     }
+    if(e.target.closest('[data-task]')){fresh=true;draft.clear();}
   });
   document.addEventListener('keydown', e => {
     if (e.target.id === 'prompt' && e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); q('#prompt-form').requestSubmit(); }

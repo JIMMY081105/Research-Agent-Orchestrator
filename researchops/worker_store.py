@@ -100,6 +100,10 @@ class Store:
                 """)
                 if 'kind' not in {r[1] for r in db.execute('PRAGMA table_info(turns)')}:
                     db.execute("ALTER TABLE turns ADD COLUMN kind TEXT NOT NULL DEFAULT 'task'")
+                columns={r[1] for r in db.execute('PRAGMA table_info(turns)')}
+                for column,default in (('work_mode','task'),('service_tier','standard'),('goal_objective','')):
+                    if column not in columns:
+                        db.execute("ALTER TABLE turns ADD COLUMN "+column+" TEXT NOT NULL DEFAULT '"+default+"'")
 
     @contextlib.contextmanager
     def db(self, read_only=False):
@@ -153,18 +157,19 @@ class Store:
                 "modes": list(MODES), "default_mode": "approval", "prompt_chars": 20000,
                 "skills": service.get("skills", []), "models": service.get("models", []),
                 "default_model": service.get("default_model"), "source_sha256": service.get("source_sha256"),
+                "model_details":service.get('model_details',{}),"work_modes":service.get('work_modes',['task']),
                 "permission_change": "NEXT_TURN_ONLY", "existing_sessions_adopted": False}
 
     def submit(self, request):
         expected = {"id", "session", "prompt", "mode", "effort", "skills"}
-        if type(request) is not dict or not expected <= set(request) <= expected | {'model','kind'}:
+        if type(request) is not dict or not expected <= set(request) <= expected | {'model','kind','work_mode','service_tier','goal_objective'}:
             raise WorkerError("INVALID_WORKER_SUBMISSION")
         turn_id = ident(request["id"])
         session = ident(request["session"]) if request["session"] is not None else turn_id
         prompt = request["prompt"]
         if type(prompt) is not str or not prompt.strip() or len(prompt) > 20000 or "\x00" in prompt or SECRET.search(prompt):
             raise WorkerError("INVALID_OR_SENSITIVE_PROMPT")
-        if request["mode"] not in MODES or request["effort"] not in ("medium", "high", "xhigh"):
+        if request["mode"] not in MODES or request["effort"] not in ("low","medium", "high", "xhigh","max"):
             raise WorkerError("INVALID_WORKER_SETTINGS")
         skills = request["skills"]
         if type(skills) is not list or len(skills) > 8 or any(type(x) is not str for x in skills) or len(set(skills)) != len(skills):
@@ -179,6 +184,13 @@ class Store:
             raise WorkerError('ANALYSIS_REQUIRES_FRESH_READ_ONLY_SESSION')
         if request.get('model') and requested_model not in capability.get('models', []):
             raise WorkerError('MODEL_NOT_AVAILABLE')
+        work_mode=request.get('work_mode','task');tier=request.get('service_tier','standard');objective=request.get('goal_objective','')
+        details=capability.get('model_details',{}).get(requested_model,{})
+        if work_mode not in capability.get('work_modes',['task']) or tier not in ['standard',*details.get('service_tiers',[])]:
+            raise WorkerError('NATIVE_MODE_OR_SPEED_NOT_AVAILABLE')
+        if request['effort'] not in details.get('efforts',['medium','high','xhigh']):raise WorkerError('MODEL_EFFORT_NOT_AVAILABLE')
+        if type(objective) is not str or SECRET.search(objective) or '\x00' in objective or (work_mode=='goal' and (not objective.strip() or len(objective)>4000 or kind=='analysis')) or (work_mode!='goal' and objective):
+            raise WorkerError('INVALID_GOAL_OBJECTIVE')
         names = {x["id"] for x in capability["skills"]}
         if any(x not in names for x in skills):
             raise WorkerError("UNKNOWN_WORKER_SKILL")
@@ -202,8 +214,8 @@ class Store:
             elif request.get('model') and requested_model != row['model']:
                 raise WorkerError('NEW_SESSION_REQUIRED_FOR_MODEL_CHANGE')
             stamp = utc()
-            db.execute("INSERT INTO turns(id,session,input_hash,prompt,mode,effort,skills,state,created,updated,kind) VALUES(?,?,?,?,?,?,?,?,?,?,?)",
-                       (turn_id, session, binding, prompt, request["mode"], request["effort"], json.dumps(skills), "QUEUED", stamp, stamp,kind))
+            db.execute("INSERT INTO turns(id,session,input_hash,prompt,mode,effort,skills,state,created,updated,kind,work_mode,service_tier,goal_objective) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                       (turn_id, session, binding, prompt, request["mode"], request["effort"], json.dumps(skills), "QUEUED", stamp, stamp,kind,work_mode,tier,objective))
             folder = safe_path(self.runtime / "turns" / turn_id)
             folder.mkdir(parents=True, exist_ok=False)
             save(folder / "request.json", request)
@@ -296,7 +308,10 @@ class Store:
                 session = sessions[0]["id"]
             if session is not None:
                 ident(session)
-            turns = [dict(r) for r in db.execute("SELECT id,session,prompt,mode,effort,state,created,updated,native_turn,response,reason,reworks FROM turns WHERE session=? ORDER BY created DESC LIMIT 20", (session,))]
+                if not any(s['id']==session for s in sessions):
+                    row=db.execute('SELECT * FROM sessions WHERE id=?',(session,)).fetchone()
+                    if row:sessions.append(dict(row))
+            turns = [dict(r) for r in db.execute("SELECT id,session,prompt,mode,effort,state,created,updated,native_turn,response,reason,reworks,work_mode,service_tier FROM turns WHERE session=? ORDER BY created DESC LIMIT 20", (session,))]
             approvals = [dict(r) for r in db.execute("SELECT id,turn,method,params,state FROM approvals WHERE session=? AND state='PENDING' ORDER BY created", (session,))]
             events = [dict(r) for r in db.execute("SELECT id,turn,kind,body,created FROM events WHERE session=? ORDER BY id DESC LIMIT 60", (session,))]
             total = db.execute("SELECT count(*) FROM turns WHERE session=?", (session,)).fetchone()[0]
@@ -304,7 +319,11 @@ class Store:
             row["params"] = json.loads(row["params"])
         events = list(reversed(events))
         from .mission_status import workflow
-        return {"capability": capability, "sessions": sessions, "session": session,
+        goal=None
+        if session:
+            path=safe_path(self.runtime/'goals'/session/'state.json')
+            if path.exists() and path.stat().st_size<32768:goal=json.loads(path.read_text(encoding='utf-8'))
+        return {"capability": capability, "sessions": sessions, "session": session,"goal":goal,
                 "turns": turns, "approvals": approvals, "events": events,
                 "workflow": workflow(self.runtime, turns, sessions, events, total)}
 

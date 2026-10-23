@@ -126,6 +126,7 @@ def review_turn(runtime, store, turn, source_sha):
               "Review the complete changes and necessary attached context; do not request an unrelated repository scan. "
               "A previous REWORK is not an approved baseline. If necessary source or a contract is missing, return NEEDS_CONTEXT with exact missing paths and reasons, never infer it or PASS. "
               "PASS means this local workspace review only, not scientific READY or permission to publish; PASS requires no actionable issues. Return exact schema JSON.\n"
+              "For Goal execution_settings, an incomplete native goal is an intermediate stage: audit the concrete stage's correctness and progress, not an assertion that the entire objective is achieved. If the native goal is complete, verify the original goal_objective against the supplied artifacts. Host-provided AGENTS.md is standing configuration, not an unauthorized model artifact.\n"
               + skills + '\n\nFIXED TASK EVIDENCE:\n' + canonical(package).decode("utf-8"))
     try:
         value, evidence = adapters.invoke("claude", machine, {**policy, "timeout_seconds": 180, 'minimal_review_system': True,'single_turn_json_review':True}, prompt,

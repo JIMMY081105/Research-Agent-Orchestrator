@@ -1,0 +1,2 @@
+<section class="artifact-gallery"><h3>Visualisation</h3>
+{% for name in files %}<figure><figcaption>{{ name }}</figcaption>{% if name.endswith('.html') %}<iframe title="{{ name }}" sandbox="allow-scripts" src="/execution/artifact/{{ ident }}/{{ name|urlencode }}" loading="lazy" referrerpolicy="no-referrer"></iframe>{% else %}<img alt="{{ name }}" src="/execution/artifact/{{ ident }}/{{ name|urlencode }}" loading="lazy">{% endif %}</figure>{% else %}<p>本任务尚无可展示的 HTML / PNG / JPEG。勾选 Visualisation 可调用真实 skill；生成后点此查看。</p>{% endfor %}</section>

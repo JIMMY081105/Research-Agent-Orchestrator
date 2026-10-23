@@ -27,7 +27,7 @@ Consolidate validates the three owned canonical shortcuts, prepares the one nati
 
 The bounded Task/Standard integration is **deployed on the configured Windows machine**. A missing or paused verified worker is shown as WORKER OFFLINE and leaves Send disabled. The UI automatically observes readiness changes and refreshes actual CLI options without losing the composer. A failed connection never queues a hidden task. It is the same BGV application, not a second product.
 
-The installed worker submits explicit Codex Task/Standard turns or fresh read-only text analysis, shows actual browser-owned progress/approvals and independent Claude review with at most two repairs. Model choices come from the actual CLI (the configured CLI currently reports gpt-6-astra as default, not GPT-6.1 Sol). Plan/Goal/Fast remain unaccepted execution modes. Full Access removes native OS confinement/approvals for that turn but grants no new research, GPU or publication authorization.
+The capability release adds catalog-backed GPT-6.1 Sol / Extra high, native Fast and read-only Plan, persistent Goal with reviewed continuations, visualization artifacts and a durable browser-owned task sidebar. Consult the local acceptance report for the installed version. Task delivery and fresh read-only text analysis remain available. Full Access removes native OS confinement/approvals for that turn but grants no new research, GPU or publication authorization. Goal final-stage automatic PR delivery is not connected.
 
 UI polling invokes no model calls. Source and private runtime remain separate. Frontend layout/entry changes do not require Claude review under the user's instruction. See [execution integration](../EXECUTION-INTEGRATION.md) for remaining deployment gates.
 

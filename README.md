@@ -29,7 +29,10 @@ a building, or authorize research changes.
 
 ## Desktop and execution
 
-- **Prompt:** bottom composer, reference material, actual supported model/effort selection and native permission profiles. Task/Standard is connected; Plan/Goal/Fast are not accepted execution modes.
+- **Prompt:** bottom composer, reference material, catalog-bound model/effort selection and native permission profiles. The capability release connects GPT-6.1 Sol / Extra high by default, catalog-provided Fast, native read-only Plan and persisted Goal. Runtime acceptance reports identify the currently installed release.
+- **Task sidebar:** submitted conversations remain selectable after navigation and application restart. Each opens its own Codex/Claude stage board, public conversation, approval requests and review results; another browser's tasks are not adopted.
+- **Visualisation:** an explicit checkbox selects the actual visualization skill. Generated task-owned HTML/PNG/JPEG can be viewed inside the conversation; HTML runs in an isolated frame with network/form/parent access blocked.
+- **Goal:** native thread objective, lifecycle and token accounting remain persistent. Each productive continuation waits for Claude's fixed-artifact review; no-action turns suppress automatic continuation. Stop pauses the native goal; Resume retains its objective/accounting. Goal final-stage automatic PR delivery is not connected: use Task for reviewed Draft PR delivery.
 - **Progress:** David/Lucy stage board and actual execution/review status. Conversation, command records and approval requests remain in Prompt.
 - **Text analysis:** always a fresh native read-only session. It cannot inherit an existing write-capable session.
 - **Corrections:** at most two repairs using concrete independent findings, preserving the original input and every attempt. Crashes or uncertain starts require reconciliation rather than replay.
