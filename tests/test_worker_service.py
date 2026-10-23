@@ -187,5 +187,75 @@ class WorkerServiceTests(unittest.TestCase):
         self.service.rpc.call.assert_not_called(); charged.assert_not_called()
         self.assertEqual(self.store.status()['turns'][0]['state'], 'QUEUED')
 
+    def test_timeout_interrupt_ack_keeps_writer_gate_until_matching_native_completion(self):
+        turn=self.turn();self.begin(turn)
+        self.service.rpc.call.side_effect=None;self.service.rpc.call.return_value={}
+        self.service.rpc.call.reset_mock();self.service.rpc.drain.return_value=[]
+        turn['running_seconds']=3601
+        self.service.tick()
+        self.assertEqual(self.store.status()['turns'][0]['state'],'CANCELLING')
+        self.assertIs(self.service.active_turn,turn)
+        with self.assertRaisesRegex(WorkerError,'WORKER_BUSY'):
+            self.turn(session=turn['session'])
+        self.service.tick()
+        self.service.rpc.call.assert_called_once_with('turn/interrupt',{'threadId':'owned','turnId':'native'})
+        self.service.handle({'method':'turn/completed','params':{'threadId':'foreign','turn':{'id':'native','status':'interrupted'}}})
+        self.assertIs(self.service.active_turn,turn)
+        self.service.handle({'method':'turn/completed','params':{'threadId':'owned','turn':{'id':'native','status':'interrupted'}}})
+        self.assertIsNone(self.service.active_turn)
+        self.assertEqual(self.store.status()['turns'][0]['state'],'INTERRUPTED')
+        self.review.assert_not_called()
+        self.assertEqual(self.turn(session=turn['session'])['state'],'QUEUED')
+
+    def test_user_cancel_and_timeout_same_tick_send_only_one_interrupt(self):
+        turn=self.turn();self.begin(turn)
+        self.service.rpc.call.side_effect=None;self.service.rpc.call.return_value={}
+        self.service.rpc.call.reset_mock();self.service.rpc.drain.return_value=[]
+        turn['running_seconds']=3601
+        self.store.update(turn['id'],cancel_requested=1)
+        self.service.tick();self.service.tick()
+        self.assertEqual(self.service.rpc.call.call_count,1)
+        self.assertEqual(self.store.status()['turns'][0]['state'],'CANCELLING')
+        self.assertIs(self.service.active_turn,turn)
+
+    def test_native_terminal_waits_for_all_actual_writer_exit_notifications(self):
+        turn=self.turn();self.begin(turn)
+        self.service.rpc.call.side_effect=None;self.service.rpc.call.return_value={}
+        self.service.rpc.call.reset_mock();self.service.rpc.drain.return_value=[]
+        for kind in ('commandExecution','fileChange'):
+            self.service.handle({'method':'item/started','params':{'threadId':'owned','turnId':'native',
+                'item':{'type':kind,'id':'same-id','status':'inProgress'}}})
+        self.service.handle({'method':'turn/completed','params':{'threadId':'owned','turn':{'id':'native','status':'interrupted'}}})
+        self.assertEqual(self.store.status()['turns'][0]['state'],'WAITING_TOOL_EXIT')
+        with self.assertRaisesRegex(WorkerError,'WORKER_BUSY'):self.turn(session=turn['session'])
+        self.store.cancel({'id':turn['id']});self.service.tick()
+        self.service.rpc.call.assert_not_called()
+        self.service.handle({'method':'item/completed','params':{'threadId':'foreign','turnId':'native',
+            'item':{'type':'commandExecution','id':'same-id','status':'completed'}}})
+        self.assertEqual(len(self.service.active_writers),2)
+        for kind in ('commandExecution','fileChange'):
+            self.service.handle({'method':'item/completed','params':{'threadId':'owned','turnId':'native',
+                'item':{'type':kind,'id':'same-id','status':'completed'}}})
+            if kind=='commandExecution':self.assertEqual(self.store.status()['turns'][0]['state'],'WAITING_TOOL_EXIT')
+        self.assertEqual(self.store.status()['turns'][0]['state'],'INTERRUPTED')
+        self.assertIsNone(self.service.active_turn);self.review.assert_not_called()
+
+    def test_writer_without_stable_native_identity_fails_closed(self):
+        turn=self.turn();self.begin(turn)
+        with self.assertRaisesRegex(WorkerError,'NATIVE_WRITER_ID_MISSING'):
+            self.service.handle({'method':'item/started','params':{'threadId':'owned','turnId':'native',
+                'item':{'type':'commandExecution','status':'inProgress'}}})
+        self.assertIs(self.service.active_turn,turn)
+        with self.assertRaisesRegex(WorkerError,'NATIVE_WRITER_SCOPE_MISSING'):
+            self.service.handle({'method':'item/started','params':{'threadId':'owned',
+                'item':{'type':'commandExecution','id':'command','status':'inProgress'}}})
+        self.assertIs(self.service.active_turn,turn)
+
+    def test_recovery_marks_waiting_tool_exit_for_reconciliation_not_replay(self):
+        turn=self.turn();self.store.update(turn['id'],state='WAITING_TOOL_EXIT')
+        self.service.recover()
+        self.assertEqual(self.store.status()['turns'][0]['state'],'INTERRUPTED_NEEDS_RECONCILIATION')
+        self.assertIsNone(self.service.next_turn())
+
 
 if __name__ == '__main__': unittest.main()

@@ -39,6 +39,8 @@ class Service:
         self.active_turn = None
         self.message_text = {}
         self.message_phases = {}
+        self.active_writers = set()
+        self.pending_terminal = None
         self.stop = threading.Event()
         self.started_at = utc()
         self.heartbeat_lock = threading.Lock()
@@ -56,7 +58,7 @@ class Service:
                 raise WorkerError("PREVIOUS_WORKER_PROCESS_STILL_LIVE_OR_UNKNOWN")
         with self.store.db() as db:
             # A crash is not permission to replay a running native turn or remote experiment.
-            db.execute("UPDATE turns SET state='INTERRUPTED_NEEDS_RECONCILIATION',reason='WORKER_RESTART_NO_AUTOMATIC_REPLAY',updated=? WHERE state IN ('STARTING','RUNNING','WAITING_APPROVAL','WAITING_INPUT','REVIEWING','CANCELLING')", (utc(),))
+            db.execute("UPDATE turns SET state='INTERRUPTED_NEEDS_RECONCILIATION',reason='WORKER_RESTART_NO_AUTOMATIC_REPLAY',updated=? WHERE state IN ('STARTING','RUNNING','WAITING_APPROVAL','WAITING_INPUT','REVIEWING','CANCELLING','WAITING_TOOL_EXIT')", (utc(),))
             db.execute("UPDATE approvals SET state='EXPIRED',updated=? WHERE state IN ('PENDING','ANSWERED')", (utc(),))
 
     def start(self):
@@ -171,6 +173,8 @@ class Service:
         self.active_turn = turn
         self.message_text = {}
         self.message_phases = {}
+        self.active_writers = set()
+        self.pending_terminal = None
         self.store.update(turn["id"], state="RUNNING", native_turn=turn["native_turn"])
         self.store.event(turn["session"], turn["id"], "STATUS", "Codex 已开始 · " + turn["mode"])
 
@@ -182,7 +186,7 @@ class Service:
                               if not has_final or self.message_phases.get(key) != 'commentary'), 64000)
 
     def answer(self):
-        if not self.active_turn:
+        if not self.active_turn or self.pending_terminal is not None:
             return
         turn = self.active_turn
         with self.store.db(True) as db:
@@ -246,6 +250,17 @@ class Service:
         elif method in ("item/started", "item/completed"):
             item = params.get("item", {})
             kind = item.get("type")
+            if kind in ('commandExecution','fileChange'):
+                if params.get('threadId') != turn['thread'] or params.get('turnId') != turn['native_turn']:
+                    raise WorkerError('NATIVE_WRITER_SCOPE_MISSING')
+                writer_id = item.get('id')
+                if type(writer_id) is not str or not writer_id:
+                    raise WorkerError('NATIVE_WRITER_ID_MISSING')
+                writer_key = (kind, writer_id)
+                if method == 'item/completed' and item.get('status') in ('completed','failed','declined'):
+                    self.active_writers.discard(writer_key)
+                else:
+                    self.active_writers.add(writer_key)
             if kind == "commandExecution":
                 self.store.event(turn["session"], turn["id"], "COMMAND", json.dumps({"command": clean(item.get("command", ""), 6000), "cwd": item.get("cwd"), "status": item.get("status"), "exit_code": item.get("exitCode")}, ensure_ascii=False))
             elif kind == "fileChange":
@@ -255,6 +270,10 @@ class Service:
                 self.message_text[key] = clean(item.get("text", ""), 64000)
                 self.message_phases[key] = item.get('phase')
                 self.store.update(turn["id"], response=clean("\n".join(self.message_text.values()), 64000))
+            if self.pending_terminal is not None and not self.active_writers:
+                terminal = self.pending_terminal
+                self.pending_terminal = None
+                self.handle(terminal)
         elif method == "serverRequest/resolved":
             with self.store.db() as db:
                 db.execute("UPDATE approvals SET state='RESOLVED',updated=? WHERE turn=? AND rpc_id=?", (utc(), turn["id"], json.dumps(params.get("requestId"))))
@@ -262,6 +281,16 @@ class Service:
             native = params.get("turn", {})
             if native.get("id") != turn["native_turn"]:
                 raise WorkerError("COMPLETED_TURN_ID_MISMATCH")
+            if self.active_writers:
+                # Native turn interruption can precede foreground command exit.
+                # Keep one-writer admission closed through the actual terminal
+                # command/file notifications, not just the model-turn notification.
+                self.pending_terminal = value
+                self.store.update(turn['id'],state='WAITING_TOOL_EXIT',reason='NATIVE_TURN_ENDED_TOOL_EXIT_UNVERIFIED')
+                with self.store.db() as db:
+                    db.execute("UPDATE approvals SET state='EXPIRED',updated=? WHERE turn=? AND state IN ('PENDING','ANSWERED')",(utc(),turn['id']))
+                self.store.event(turn['session'],turn['id'],'STATUS','原生回合已结束；仍等待本系统命令退出，不重复派发。')
+                return
             state = native.get("status")
             if state != "completed":
                 # Persist fixed categories only, never raw provider responses.
@@ -316,17 +345,21 @@ class Service:
             with self.store.db(True) as db:
                 row = db.execute("SELECT state,cancel_requested FROM turns WHERE id=?", (turn["id"],)).fetchone()
                 state = row["state"]
-            if row["cancel_requested"] and state != "CANCELLING":
-                self.rpc.call("turn/interrupt", {"threadId": turn["thread"], "turnId": turn["native_turn"]})
-                self.store.update(turn["id"], state="CANCELLING", reason="USER_REQUESTED_CANCEL")
             now = time.monotonic()
             if state == "RUNNING":
                 turn["running_seconds"] += now - turn["last_tick"]
             turn["last_tick"] = now
-            if state == "RUNNING" and turn["running_seconds"] > 3600:
+            timed_out = state == "RUNNING" and turn["running_seconds"] > 3600
+            if self.pending_terminal is None and state != "CANCELLING" and (row["cancel_requested"] or timed_out):
                 self.rpc.call("turn/interrupt", {"threadId": turn["thread"], "turnId": turn["native_turn"]})
-                self.store.update(turn["id"], state="INTERRUPTED_NEEDS_RECONCILIATION", reason="OWNED_TURN_TIMEOUT_NO_REPLAY")
-                self.active_turn = None
+                # The interrupt RPC acknowledges a request, not termination.
+                # Retain the owned turn and BUSY writer gate until its exact
+                # native turn/completed event arrives. Never replay on timeout.
+                self.store.update(turn["id"], state="CANCELLING",
+                                  reason="USER_REQUESTED_CANCEL" if row["cancel_requested"]
+                                  else "OWNED_TIMEOUT_WAITING_NATIVE_COMPLETION")
+                self.store.event(turn["session"], turn["id"], "STATUS",
+                                 "已请求中断；等待原生任务结束，不重复派发。")
         else:
             if safe_path(self.store.runtime / 'stop-when-idle.json').exists():
                 self.stop.set()

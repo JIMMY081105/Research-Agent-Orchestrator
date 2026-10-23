@@ -15,7 +15,7 @@ from .dashboard_bundle import safe_path
 
 OWNER = "BGV.Windows.CodexWorker.v1"
 MODES = ("approval", "full")
-BUSY = ("QUEUED", "STARTING", "RUNNING", "WAITING_APPROVAL", "WAITING_INPUT", "REVIEWING", "CANCELLING")
+BUSY = ("QUEUED", "STARTING", "RUNNING", "WAITING_APPROVAL", "WAITING_INPUT", "REVIEWING", "CANCELLING", "WAITING_TOOL_EXIT")
 SECRET = re.compile(r"(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|sk-(?:proj-|ant-)?[A-Za-z0-9_-]{20,}|(?i:Bearer)\s+[A-Za-z0-9._-]{20,})")
 
 

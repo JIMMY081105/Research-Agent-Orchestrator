@@ -3,7 +3,7 @@
 {% set session_info=(live.sessions|selectattr('id','equalto',live.session)|list|first) %}
 {% set state=turn.state if turn else 'IDLE' %}
 {% set execution_complete=state in ['REVIEWING','PAUSED_REVIEW','REVIEW_PASS','NEEDS_REWORK'] %}
-{% set labels={'QUEUED':'已入队','STARTING':'正在连接','RUNNING':'执行中','WAITING_APPROVAL':'等待操作批准','WAITING_INPUT':'等待补充信息','REVIEWING':'交给 Claude 审核','REVIEW_PASS':'本阶段通过','NEEDS_REWORK':'需要处理','PAUSED_REVIEW':'审核暂停','PAUSED_MODEL_ERROR':'调用暂停','CANCELLED':'本轮已停止'} %}
+{% set labels={'QUEUED':'已入队','STARTING':'正在连接','RUNNING':'执行中','WAITING_APPROVAL':'等待操作批准','WAITING_INPUT':'等待补充信息','WAITING_TOOL_EXIT':'等待命令实际退出','CANCELLING':'已请求中断，等待确认','REVIEWING':'交给 Claude 审核','REVIEW_PASS':'本阶段通过','NEEDS_REWORK':'需要处理','PAUSED_REVIEW':'审核暂停','PAUSED_MODEL_ERROR':'调用暂停','CANCELLED':'本轮已停止'} %}
 <section class="progress-page live-board" data-view="progress" data-live-progress hx-get="/execution/progress/{{ live.session }}" hx-trigger="every 3s" hx-target="this" hx-swap="outerHTML">
   <header class="progress-heading"><div><p class="eyebrow">MISSION CONTROL / LIVE</p><h1>任务进度</h1><p>{{ labels.get(state,state) }}{% if turn and turn.reason %} · {{ turn.reason }}{% endif %}</p></div><span class="mission-id">{{ live.session[:8] }}<span>真实任务 · 修复 {{ turn.reworks if turn else 0 }}/2</span></span></header>
   {% if live.approvals %}<div class="pending-strip" role="status"><span>有 {{ live.approvals|length }} 项请求待处理</span><button type="button" hx-get="/view/prompt" hx-target="#workspace">在 Prompt 查看</button></div>{% endif %}
