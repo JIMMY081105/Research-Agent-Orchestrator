@@ -16,6 +16,7 @@ $python=Join-Path $repo '.venv\Scripts\pythonw.exe'
 $appScript=Join-Path $PSScriptRoot 'app.py'
 $appWorkdir=$repo
 $workerActivation='E:\Github\Building-Generation-Validation\.runtime\worker\activation.json'
+$expectedUI=$null
 if(Test-Path -LiteralPath $workerActivation){
     $worker=Get-Content -LiteralPath $workerActivation -Raw|ConvertFrom-Json
     if($worker.owner -cne 'BGV.Windows.CodexWorker.v1' -or $worker.sha256 -cnotmatch '^[0-9a-f]{64}$'){throw 'Unknown worker activation'}
@@ -24,6 +25,28 @@ if(Test-Path -LiteralPath $workerActivation){
     & 'C:\Python312\python.exe' -B (Join-Path $expected 'worker.py') status --expected-hash $worker.sha256|Out-Null
     if($LASTEXITCODE -ne 0){throw 'Accepted UI snapshot verification failed'}
     $appScript=Join-Path $expected 'ui_preview\app.py';$appWorkdir=$expected
+    $expectedUI=$worker.sha256
+    $presentationActivation='E:\Github\Building-Generation-Validation\.runtime\desktop-ui\activation.json'
+    if(Test-Path -LiteralPath $presentationActivation){
+        $presentation=Get-Content -LiteralPath $presentationActivation -Raw|ConvertFrom-Json
+        if($presentation.owner -cne 'BGV.SceneControl.UI.v1' -or $presentation.sha256 -cnotmatch '^[0-9a-f]{64}$' -or $presentation.approval -cne 'UI_ONLY_USER_EXEMPT'){throw 'Unknown UI activation'}
+        if($presentation.base_worker_sha256 -ceq $worker.sha256){
+            $uiSource='E:\Github\Building-Generation-Validation\.runtime\desktop\snapshots\'+$presentation.sha256+'\source'
+            if($presentation.source -cne $uiSource){throw 'UI source outside fixed snapshot'}
+            # Verification runs from the independently accepted worker, not from
+            # mutable UI code. A presentation release cannot change its backend.
+            & 'C:\Python312\python.exe' -B (Join-Path $expected 'desktop.py') verify --root $uiSource --runtime 'E:\Github\Building-Generation-Validation\.runtime' --expected-hash $presentation.sha256|Out-Null
+            if($LASTEXITCODE -ne 0){throw 'UI snapshot verification failed'}
+            $baseManifest=Get-Content -LiteralPath (Join-Path (Split-Path -Parent $expected) 'manifest.json') -Raw|ConvertFrom-Json
+            $uiManifest=Get-Content -LiteralPath (Join-Path (Split-Path -Parent $uiSource) 'manifest.json') -Raw|ConvertFrom-Json
+            $allowedUI=@('source/ui_preview/app.py','source/ui_preview/Start-Preview.ps1','source/ui_preview/test_preview.py')
+            if(@($baseManifest.files.psobject.Properties).Count -ne @($uiManifest.files.psobject.Properties).Count){throw 'UI inventory changed'}
+            foreach($item in $baseManifest.files.psobject.Properties){
+                if($item.Name -cnotin $allowedUI -and $uiManifest.files.($item.Name) -cne $item.Value){throw 'UI release attempted backend change'}
+            }
+            $appScript=Join-Path $uiSource 'ui_preview\app.py';$appWorkdir=$uiSource;$expectedUI=$presentation.sha256
+        }
+    }
 }
 # One application for both historical invocations. -Desktop is retained only
 # for compatibility with existing shortcuts; omitting it cannot open a second UI.
@@ -63,6 +86,7 @@ function Preview-Health {
 }
 $health=Preview-Health
 if($health -and ($health.owner -cne 'BGV.SceneControl.UI.v1' -or $health.ui_only -notin @($true,$false))){throw 'Port 8878 belongs to another application'}
+if($health -and $expectedUI -and $health.ui_bundle_sha256 -cne $expectedUI){throw 'Owned UI is an older release; preserve its draft and perform the owned UI upgrade'}
 if(-not $health){
     $listener=Get-NetTCPConnection -LocalPort 8878 -State Listen -ErrorAction SilentlyContinue
     if($listener){throw 'Preview port is already occupied; nothing stopped'}

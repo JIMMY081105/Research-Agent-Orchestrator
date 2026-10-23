@@ -132,7 +132,9 @@ def create_app(testing=False):
     @app.get('/avatars/<name>')
     def avatar(name):
         if name not in ('david.mp4','lucy.mp4','david.jpg','lucy.jpg'): abort(404)
-        return send_from_directory(ROOT.parent/'assets'/'avatars',name)
+        directory=ROOT.parent/'assets'
+        if (directory/'avatars').is_dir():directory=directory/'avatars'
+        return send_from_directory(directory,name)
 
     @app.get('/preview-health')
     def health(): return dict(owner=OWNER,ui_only=not execution.capability().get('enabled'),pid=os.getpid(),ui_bundle_sha256=ROOT.parent.parent.name if ROOT.parent.name=='source' else 'development')

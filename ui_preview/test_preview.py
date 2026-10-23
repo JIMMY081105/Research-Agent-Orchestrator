@@ -7,6 +7,19 @@ from app import create_app
 class PreviewTests(unittest.TestCase):
     def setUp(self):
         self.client=create_app(testing=True).test_client()
+    def test_frozen_flat_avatar_assets_and_byte_range(self):
+        import tempfile
+        from pathlib import Path
+        import app
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);(root/'ui_preview').mkdir();(root/'assets').mkdir()
+            clip=b'0000ftypverified-avatar';(root/'assets/david.mp4').write_bytes(clip)
+            with patch.object(app,'ROOT',root/'ui_preview'):
+                with self.client.get('/avatars/david.mp4') as response:
+                    self.assertEqual(response.status_code,200);self.assertEqual(response.data,clip)
+                with self.client.get('/avatars/david.mp4',headers={'Range':'bytes=0-7'}) as response:
+                    self.assertEqual(response.status_code,206);self.assertEqual(response.data,clip[:8])
+                self.assertEqual(self.client.get('/avatars/unknown.mp4').status_code,404)
     def test_templates_and_fragments_render(self):
         for path in ('/','/view/prompt','/view/progress','/view/progress?scenario=approval','/view/progress?scenario=blocked'):
             with self.subTest(path=path): self.assertEqual(200,self.client.get(path).status_code)
