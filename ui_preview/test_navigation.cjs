@@ -40,3 +40,19 @@ assert.equal(request('/execution/progress/owned').prevented,true);
 assert.equal(request('/execution/status/owned').prevented,undefined);
 assert.equal(request('/execute','prompt-form').prevented,undefined,'navigation must not cancel an actual task submission');
 console.log('PASS: late response isolation in both directions, wrong-page GET suppression, and no task-submission cancellation');
+
+// A goal reply must keep the same objective without requiring navigation.
+// Completion returns the composer to Task without making a model request.
+const liveHandlers=new Map();
+const originalGoal={value:'Original goal'},goalState={value:'paused'};
+const goalField={value:'',readOnly:false,dispatchEvent(){}};
+const modeField={value:'Goal',dispatchEvent(event){event.target=this;for(const fn of liveHandlers.get(event.type)||[])fn(event)}};
+const liveDoc={addEventListener(name,fn){if(!liveHandlers.has(name))liveHandlers.set(name,[]);liveHandlers.get(name).push(fn)},querySelector(selector){
+ return {'#next-worker-goal-objective':originalGoal,'#next-worker-goal-state':goalState,'#prompt-form [name=goal_objective]':goalField,'#prompt-form [name=mode]':modeField,'[name=mode]':modeField}[selector]||null;
+}};
+vm.runInNewContext(fs.readFileSync(__dirname+'/static/execution.js','utf8'),{document:liveDoc,Event:class{constructor(type){this.type=type}}});
+for(const fn of liveHandlers.get('htmx:afterSwap'))fn({});
+assert.equal(goalField.value,'Original goal');assert.equal(goalField.readOnly,true);assert.equal(modeField.value,'Goal');
+goalState.value='complete';for(const fn of liveHandlers.get('htmx:afterSwap'))fn({});
+assert.equal(goalField.value,'Original goal');assert.equal(modeField.value,'Task');
+console.log('PASS: live goal objective preservation and completed-goal Task follow-up without a new model request');

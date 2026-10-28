@@ -1,5 +1,10 @@
 {% set turn=status.turns[0] if status.turns else none %}
 <section id="live-execution" class="live-execution"{% if turn and (turn.state in ['QUEUED','STARTING','RUNNING','WAITING_APPROVAL','WAITING_INPUT','REVIEWING','CANCELLING','WAITING_TOOL_EXIT'] or (status.delivery and status.delivery.state in ['WAITING_REVIEW','PREPARING','PREPARED','PUBLISHING'])) %} hx-get="/execution/status/{{ task.session }}" hx-trigger="every 2s" hx-target="this" hx-swap="outerHTML"{% endif %}>
+  <nav class="task-interface"><button type="button" hx-get="/view/progress" hx-target="#workspace">Codex / Claude 界面 ↗</button><button type="button" hx-get="/execution/artifacts/{{ task.session }}" hx-target="#task-artifacts">Visualisation</button></nav>
+  <div id="task-artifacts"></div>
+  {% if status.goal and status.goal.status!='complete' %}<form hx-post="/execution/goal/pause" hx-target="#live-execution" hx-swap="outerHTML"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="session" value="{{ task.session }}"><button>暂停 Goal（保留审核与历史）</button></form>{% endif %}
+  {% for old in status.turns[1:]|reverse %}<details class="bubble"><summary>{{ old.created[:19] }} · {{ old.state }}</summary><p>{{ old.prompt }}</p><div class="live-answer">{{ old.response or '' }}</div></details>{% endfor %}
+  {% if status.goal %}<div class="goal-status">Goal · {{ status.goal.status }} · {{ status.goal.host_wait|default('') }} · 原生记录 {{ status.goal.tokensUsed }} tokens<p>{{ status.goal.objective }}</p><small>主程序逐阶段派发并审核；原生 Goal 保持暂停以防重复续跑。实际调用用量见各轮记录。</small>{% if status.goal.status=='paused' and (turn.state=='REVIEW_PASS' or (turn.state in ['INTERRUPTED','CANCELLED'] and turn.reworks<2)) %}<form hx-post="/execution/goal/resume" hx-target="#live-execution" hx-swap="outerHTML"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="session" value="{{ task.session }}"><button>恢复这个 Goal</button></form>{% endif %}</div>{% endif %}
   {% if turn %}<article class="bubble user">{{ turn.prompt }}</article>
   <article class="bubble assistant"><small>真实任务 {{ turn.id }} · 修复 {{ turn.reworks }}/2</small><p><b>{{ turn.state }}</b>{% if turn.reason %} · {{ turn.reason }}{% endif %}</p><div class="live-answer">{{ turn.response or '已登记，等待执行进度…' }}</div></article>
   {% for approval in status.approvals %}<form hx-post="/execution/decision" hx-target="#live-execution" hx-swap="outerHTML" class="bubble assistant">
@@ -12,6 +17,7 @@
   {% if status.delivery %}<p>GitHub：{{ status.delivery.state }}{% if status.delivery.reason %} · {{ status.delivery.reason }}{% endif %}{% if status.delivery.url %} · <a href="{{ status.delivery.url }}" target="_blank" rel="noopener noreferrer">查看本轮 Draft PR</a>{% endif %}{% if status.delivery.archive_status and status.delivery.archive_status!='APPENDED' %} · 归档待处理{% endif %}</p>{% endif %}
   {% if turn and turn.state in ['QUEUED','STARTING','RUNNING','WAITING_APPROVAL','WAITING_INPUT'] %}<form hx-post="/execution/cancel" hx-target="#live-execution" hx-swap="outerHTML"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="id" value="{{ turn.id }}"><input type="hidden" name="session" value="{{ task.session }}"><button>停止本轮</button></form>{% endif %}
   <input type="hidden" id="next-worker-session" value="{{ task.session }}">
+  {% if status.goal %}<input type="hidden" id="next-worker-goal-objective" value="{{ status.goal.objective }}"><input type="hidden" id="next-worker-goal-state" value="{{ status.goal.status }}">{% endif %}
   <input type="hidden" id="next-worker-request" value="{{ request_id }}">
   {% endif %}
 </section>

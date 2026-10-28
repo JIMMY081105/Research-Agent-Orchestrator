@@ -46,6 +46,28 @@ class WorkerStoreTests(unittest.TestCase):
         self.assertEqual(policy('full', 'C:/task'), {'approvalPolicy': 'never', 'sandboxPolicy': {'type': 'dangerFullAccess'}})
         with self.assertRaises(WorkerError): policy('bypass', 'C:/task')
 
+    def test_native_mode_speed_effort_validation_is_catalog_bound(self):
+        self.service.update(models=['test'],work_modes=['task','plan','goal'],model_details={'test':{'efforts':['low','xhigh'],'service_tiers':['priority']}})
+        save(self.root/'worker/service.json',self.service)
+        request={**self.request,'work_mode':'goal','service_tier':'priority','goal_objective':'Exact objective','effort':'xhigh'}
+        self.assertEqual(self.store.submit(request)['state'],'QUEUED')
+        self.store.update(request['id'],state='REVIEW_PASS')
+        for value in ({'service_tier':'ultrafast'},{'work_mode':'invented'},{'effort':'high'},{'goal_objective':''},{'goal_objective':'x'*4001},{'goal_objective':'sk-'+'x'*30}):
+            with self.subTest(value=value),self.assertRaises(WorkerError):self.store.submit({**request,'id':str(uuid.uuid4()),**value})
+
+    def test_goal_followup_cannot_replace_objective_or_enqueue_completed_goal(self):
+        self.service.update(models=['test'],work_modes=['task','goal']);save(self.root/'worker/service.json',self.service)
+        first={**self.request,'work_mode':'goal','goal_objective':'Original objective'}
+        self.store.submit(first);self.store.update(first['id'],state='REVIEW_PASS')
+        path=self.store.runtime/'goals'/first['id']/'state.json'
+        save(path,{'objective':'Original objective','status':'paused','tokensUsed':900})
+        with self.assertRaisesRegex(WorkerError,'OBJECTIVE_CHANGED'):
+            self.store.submit({**first,'id':str(uuid.uuid4()),'session':first['id'],'goal_objective':'New reply text'})
+        save(path,{'objective':'Original objective','status':'complete','tokensUsed':900})
+        with self.assertRaisesRegex(WorkerError,'ALREADY_COMPLETE'):
+            self.store.submit({**first,'id':str(uuid.uuid4()),'session':first['id']})
+        self.assertEqual(len(self.store.status(first['id'])['turns']),1)
+
     def test_duplicate_restart_is_one_turn_and_mode_is_immutable(self):
         first = self.store.submit(self.request)
         fresh = Store(self.root)

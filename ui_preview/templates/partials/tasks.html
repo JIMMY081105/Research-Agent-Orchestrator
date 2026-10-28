@@ -1,0 +1,3 @@
+<div id="task-list" class="task-list" hx-get="/tasks" hx-trigger="every 10s, taskChanged from:body" hx-swap="outerHTML">
+{% for item in items %}<a class="task-link {{ 'selected' if item.id==selected else '' }}" href="/?page=progress&amp;task={{ item.id }}" hx-get="/view/progress?task={{ item.id }}" hx-target="#workspace" data-task="{{ item.id }}"><span>{{ item.title }}</span><small>{{ item.state }} · {{ item.model }}</small></a>{% else %}<p class="side-copy">提交后的任务会保存在这里。<br>点开任务，查看 Codex / Claude。</p>{% endfor %}
+</div>

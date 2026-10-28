@@ -22,7 +22,7 @@
   });
   const reduced = matchMedia('(prefers-reduced-motion: reduce)');
   function remember() {
-    document.querySelectorAll('[data-draft]').forEach(e => draft.set(e.name, e.value));
+    document.querySelectorAll('[data-draft]').forEach(e => draft.set(e.name, e.type==='checkbox'?e.checked:e.value));
   }
   function motion() {
     document.documentElement.classList.toggle('page-hidden', document.hidden);
@@ -43,10 +43,11 @@
     q('#page-name').textContent = page === 'prompt' ? 'Prompt' : 'Progress';
     document.querySelectorAll('[data-nav]').forEach(e => e.setAttribute('aria-current', e.dataset.nav === page ? 'page' : 'false'));
     document.querySelectorAll('[data-draft]').forEach(e => {
+      if(e.name==='goal_objective'&&e.readOnly){draft.set(e.name,e.value);return;}
       if (!draft.has(e.name)) return;
       const group=e.closest('[data-setting]'),value=draft.get(e.name);
       if(group&&!Array.from(group.querySelectorAll('[data-option]')).some(o=>o.dataset.option===value)){draft.set(e.name,e.value);return;}
-      e.value=value;
+      if(e.type==='checkbox')e.checked=Boolean(value);else e.value=value;
     });
     syncPickers();
     motion();
@@ -79,6 +80,7 @@
       const input = group.querySelector('input');input.value = option.dataset.option;
       input.dispatchEvent(new Event('change',{bubbles:true}));menu.hidePopover();group.querySelector('.setting-trigger').focus();
     }
+    if(e.target.closest('[data-task]')){fresh=true;draft.clear();}
   });
   document.addEventListener('keydown', e => {
     if (e.target.id === 'prompt' && e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); q('#prompt-form').requestSubmit(); }
@@ -101,7 +103,7 @@
     const open = e.newState === 'open';q('[popovertarget="'+menu.id+'"]').setAttribute('aria-expanded',String(open));
     if (open) (menu.querySelector('[aria-selected=true]') || menu.querySelector('[data-option]')).focus({preventScroll:true});
   },true);
-  q('#new-chat').addEventListener('click', () => { fresh = true; draft.set('prompt',''); draft.set('references',''); });
+  q('#new-chat').addEventListener('click', () => { fresh = true; draft.set('prompt',''); draft.set('references',''); draft.set('goal_objective',''); });
   q('#motion-toggle').onclick = () => {
     const paused = document.documentElement.classList.toggle('motion-off');
     q('#motion-toggle').textContent = paused ? '◌ 动效暂停' : '◌ 动效开启';

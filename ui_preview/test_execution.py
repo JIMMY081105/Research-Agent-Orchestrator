@@ -5,7 +5,8 @@ import app
 
 
 class ExecutionUITests(unittest.TestCase):
-    def setUp(self):self.client=app.create_app(testing=True).test_client()
+    def setUp(self):
+        application=app.create_app(testing=True);self.addCleanup(application.testing_history.cleanup);self.client=application.test_client()
     def test_publisher_identity_dependency_failure_disables_only_delivery(self):
         import execution,json,tempfile,hashlib,datetime as dt
         from pathlib import Path
@@ -25,6 +26,90 @@ class ExecutionUITests(unittest.TestCase):
                 return real_import(name,*args,**kwargs)
             with patch.object(execution,'RUNTIME',rt),patch('builtins.__import__',side_effect=failed_import):
                 self.assertEqual(execution.delivery_capability(),{'enabled':False})
+
+    def test_task_sidebar_restores_only_owned_session_and_survives_cookie_list_eviction(self):
+        with self.client.session_transaction() as s:s['owned_worker_sessions']=['owned']
+        with patch('execution.conversations',return_value=[{'id':'owned','title':'A task <script>','state':'RUNNING','model':'gpt-6.1-sol'}]):
+            page=self.client.get('/tasks').get_data(as_text=True)
+            self.assertIn('/view/progress?task=owned',page);self.assertNotIn('<script>',page)
+        with self.client.session_transaction() as s:s['owned_worker_sessions']=[]
+        self.assertEqual(self.client.get('/view/prompt?task=owned').status_code,200)
+        with self.client.session_transaction() as s:self.assertEqual(s['worker_session'],'owned')
+        self.assertEqual(self.client.get('/view/prompt?task=foreign').status_code,403)
+        other=self.client.application.test_client()
+        self.assertEqual(other.get('/view/prompt?task=owned').status_code,403)
+
+    def test_visualization_is_owned_sandboxed_and_no_external_requests(self):
+        import tempfile
+        from pathlib import Path
+        with tempfile.TemporaryDirectory() as directory:
+            path=Path(directory)/'chart.html';path.write_text('<script>fetch("http://localhost/execute")</script>')
+            with self.client.session_transaction() as s:s['owned_worker_sessions']=['owned']
+            with patch('execution.artifact',return_value=path):
+                with self.client.get('/execution/artifact/owned/chart.html') as response:
+                    self.assertIn("sandbox allow-scripts",response.headers['Content-Security-Policy'])
+                    self.assertIn("connect-src 'none'",response.headers['Content-Security-Policy'])
+                    self.assertNotIn('allow-same-origin',response.headers['Content-Security-Policy'])
+            with patch('execution.artifact') as backend:
+                self.assertEqual(self.client.get('/execution/artifact/foreign/chart.html').status_code,403);backend.assert_not_called()
+
+    def test_native_controls_forward_real_settings_and_visualization_skill(self):
+        import execution
+        form={'prompt':'Draw a comparison','request_id':'id','permission':'Full Access','effort':'Extra high','speed':'Fast','mode':'Goal','goal_objective':'An inspectable chart','model':'gpt-6.1-sol','visualization':'yes'}
+        with patch('execution.capability',return_value={'skills':[{'id':'viz','name':'visualize:visualize'}]}),patch('execution.store') as backend:
+            backend.return_value.submit.return_value={'id':'id','session':'owned'};execution.submit(form)
+        value=backend.return_value.submit.call_args.args[0]
+        self.assertEqual(value['service_tier'],'priority');self.assertEqual(value['work_mode'],'goal');self.assertEqual(value['model'],'gpt-6.1-sol');self.assertEqual(value['skills'],['viz'])
+
+    def test_background_sidebar_polling_never_expires_a_long_composer_draft(self):
+        import re
+        with patch('execution.capability',return_value={'enabled':False}),patch('execution.conversations',return_value=[]):
+            page=self.client.get('/').get_data(as_text=True);nonce=re.search('name="request_id" value="([^"]+)"',page).group(1)
+            for _ in range(40):self.client.get('/tasks')
+            page=self.client.get('/').get_data(as_text=True)
+            self.assertEqual(re.search('name="request_id" value="([^"]+)"',page).group(1),nonce)
+
+    def test_late_cookie_cannot_restore_an_old_task_selection(self):
+        with self.client.session_transaction() as s:s['owned_worker_sessions']=['first','second']
+        self.client.get('/view/prompt?task=first');self.client.get('/view/prompt?task=second')
+        with self.client.session_transaction() as s:s['worker_session']='first'
+        page=self.client.get('/view/prompt').get_data(as_text=True)
+        self.assertIn('/execution/status/second',page);self.assertNotIn('/execution/status/first',page)
+
+    def test_goal_resume_cannot_replay_completed_execution_waiting_review_or_reset_repairs(self):
+        with self.client.session_transaction() as s:s['owned_worker_sessions']=['owned'];s['csrf']='nonce'
+        for state,reworks in [('PAUSED_REVIEW',0),('NEEDS_REWORK',2),('INTERRUPTED',2)]:
+            with patch('execution.status',return_value={'goal':{'status':'paused'},'turns':[{'state':state,'reworks':reworks}]}),patch('execution.store') as backend:
+                response=self.client.post('/execution/goal/resume',data={'session':'owned','csrf':'nonce'},headers={'Origin':'http://localhost'})
+                self.assertEqual(response.status_code,409);backend.return_value.submit.assert_not_called()
+
+    def test_goal_followup_keeps_original_objective_and_completed_goal_returns_to_task(self):
+        with self.client.session_transaction() as s:s['owned_worker_sessions']=['owned'];s['worker_session']='owned'
+        value={'turns':[{'id':'turn','mode':'full','effort':'xhigh','work_mode':'goal','service_tier':'priority'}],'sessions':[{'id':'owned','model':'gpt-6.1-sol'}],'goal':{'objective':'Original goal & evidence','status':'paused'}}
+        with patch('execution.status',return_value=value):
+            page=self.client.get('/view/prompt').get_data(as_text=True)
+            self.assertIn('value="Original goal &amp; evidence" readonly',page)
+            value['goal']['status']='complete';page=self.client.get('/view/prompt').get_data(as_text=True)
+            self.assertIn('name="mode" value="Task"',page)
+
+    def test_real_adapter_and_store_accept_task_followup_without_resetting_completed_goal(self):
+        import tempfile,uuid,json,execution
+        from pathlib import Path
+        from researchops.worker_store import Store,save
+        with tempfile.TemporaryDirectory() as directory:
+            store=Store(Path(directory),initialize=True);first=str(uuid.uuid4())
+            capability={'enabled':True,'models':['test'],'default_model':'test','skills':[],'work_modes':['task','goal']}
+            with patch.object(store,'capability',return_value=capability):
+                store.submit({'id':first,'session':None,'prompt':'Original goal','mode':'full','effort':'high','skills':[],'model':'test','work_mode':'goal','goal_objective':'Original goal'})
+                store.update(first,state='REVIEW_PASS');path=store.runtime/'goals'/first/'state.json'
+                save(path,{'objective':'Original goal','status':'complete','tokensUsed':900});before=path.read_bytes()
+                following=str(uuid.uuid4())
+                with patch('execution.store',return_value=store):
+                    result=execution.submit({'request_id':following,'session':first,'prompt':'Return ready','permission':'Full Access','effort':'High','speed':'Standard','mode':'Task','model':'test','goal_objective':'Original goal'})
+                self.assertEqual(result['state'],'QUEUED')
+                request=json.loads((store.runtime/'turns'/following/'request.json').read_text(encoding='utf-8'))
+                self.assertEqual(request['work_mode'],'task');self.assertEqual(request['goal_objective'],'')
+                self.assertEqual(path.read_bytes(),before);self.assertEqual(len(store.status(first)['turns']),2)
     def test_unavailable_publisher_blocks_optin_before_queue_admission(self):
         import execution
         form={'prompt':'produce report','publish_result':'yes','permission':'Full Access','effort':'High','speed':'Standard','mode':'Task'}
@@ -50,6 +135,15 @@ class ExecutionUITests(unittest.TestCase):
             backend.return_value.submit.return_value={'id':'id','session':'session'};execution.submit(form)
         cap.assert_not_called();invoke.assert_not_called()
         request=backend.return_value.submit.call_args.args[0];self.assertEqual(request['kind'],'analysis');self.assertEqual(request['mode'],'approval')
+
+    def test_read_only_plan_never_requests_a_write_or_enrolls_delivery(self):
+        import execution
+        form={'prompt':'Plan only','mode':'Plan','speed':'Fast','publish_result':'yes','permission':'Full Access','effort':'Extra high'}
+        with patch('execution.delivery_capability') as cap,patch('execution.store') as backend,patch('execution.subprocess.run') as invoke:
+            backend.return_value.submit.return_value={'id':'id','session':'owned'};execution.submit(form)
+        cap.assert_not_called();invoke.assert_not_called()
+        value=backend.return_value.submit.call_args.args[0]
+        self.assertEqual(value['work_mode'],'plan');self.assertNotIn('REPORT.md',value['prompt'])
     def test_delivery_link_and_late_writer_exit_keep_real_polling(self):
         with self.client.session_transaction() as s:s['owned_worker_sessions']=['owned']
         status={'turns':[{'id':'x','prompt':'task','state':'WAITING_TOOL_EXIT','response':'','reworks':0}], 'events':[],'approvals':[],'review_summary':None,'delivery':{'state':'PUBLISHING'}}
